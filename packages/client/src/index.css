@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-brand-textMain font-sans;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.05) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.02) 0px, transparent 50%);
+  }
+
+  /* Custom glassmorphism card effect */
+  .glass-card {
+    @apply bg-brand-card border border-brand-border rounded-xl shadow-lg;
+    backdrop-filter: blur(12px);
+  }
+
+  /* Modern custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-brand-dark;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-brand-border rounded-full hover:bg-brand-textMuted/50 transition-colors;
+  }
+}
+
+/* Animations for entries hover and form transitions */
+.entry-card-transition {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.entry-card-transition:hover {
+  transform: translateY(-2px);
+  @apply border-brand-accent/50 shadow-brand-accent/5;
+}
+
+/* Text glow for premium stats */
+.glow-text {
+  text-shadow: 0 0 20px rgba(99, 102, 241, 0.35);
+}

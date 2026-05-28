@@ -1,0 +1,208 @@
+import { useState } from 'react';
+import { Tag, Entry } from '../lib/types';
+import { BookOpen, LogOut, Plus, Trash2, Hash, Star } from 'lucide-react';
+
+interface SidebarProps {
+  user: { email: string };
+  onLogout: () => void;
+  tags: Tag[];
+  entries: Entry[];
+  activeTag: string | null;
+  onSelectTag: (tagName: string | null) => void;
+  onCreateTag: (name: string) => void;
+  onDeleteTag: (id: string) => void;
+  activeFilter: 'all' | 'favorites';
+  onSelectFilter: (filter: 'all' | 'favorites') => void;
+}
+
+export default function Sidebar({
+  user,
+  onLogout,
+  tags,
+  entries,
+  activeTag,
+  onSelectTag,
+  onCreateTag,
+  onDeleteTag,
+  activeFilter,
+  onSelectFilter
+}: SidebarProps) {
+  const [newTagName, setNewTagName] = useState('');
+  const [isAddingTag, setIsAddingTag] = useState(false);
+
+  // Compute tag counts based on stored entries
+  const getTagCount = (tagId: string) => {
+    return entries.filter((e) => e.tags.some((t) => t.id === tagId)).length;
+  };
+
+  const handleAddTagSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newTagName.trim()) {
+      onCreateTag(newTagName.trim());
+      setNewTagName('');
+      setIsAddingTag(false);
+    }
+  };
+
+  const favoriteCount = entries.filter((e) => e.is_favorite).length;
+
+  return (
+    <aside className="w-64 border-r border-brand-border/40 bg-brand-dark/40 flex flex-col h-full overflow-hidden select-none">
+      {/* Brand Header */}
+      <div className="p-6 border-b border-brand-border/40 flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-brand-accent/15 border border-brand-accent/20 text-brand-accentLight shadow-inner">
+          <BookOpen size={20} className="glow-text" />
+        </div>
+        <div>
+          <h1 className="font-bold text-lg leading-tight tracking-tight text-brand-textMain">KnowledgeHub</h1>
+          <span className="text-[10px] uppercase tracking-wider text-brand-textMuted/70 font-semibold">Personal KB</span>
+        </div>
+      </div>
+
+      {/* Navigation & Stats */}
+      <div className="p-4 flex flex-col gap-1">
+        <button
+          onClick={() => {
+            onSelectFilter('all');
+            onSelectTag(null);
+          }}
+          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-sm font-medium transition-all
+            ${activeFilter === 'all' && !activeTag
+              ? 'bg-brand-card border border-brand-border/50 text-brand-textMain shadow-sm'
+              : 'text-brand-textMuted hover:bg-brand-card/40 hover:text-brand-textMain'
+            }
+          `}
+        >
+          <div className="flex items-center gap-2.5">
+            <BookOpen size={16} />
+            <span>All Entries</span>
+          </div>
+          <span className="text-xs bg-brand-border/50 px-2 py-0.5 rounded-full text-brand-textMuted font-bold">
+            {entries.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => {
+            onSelectFilter('favorites');
+            onSelectTag(null);
+          }}
+          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-sm font-medium transition-all
+            ${activeFilter === 'favorites' && !activeTag
+              ? 'bg-brand-card border border-brand-border/50 text-brand-textMain shadow-sm'
+              : 'text-brand-textMuted hover:bg-brand-card/40 hover:text-brand-textMain'
+            }
+          `}
+        >
+          <div className="flex items-center gap-2.5">
+            <Star size={16} className={favoriteCount > 0 ? 'text-amber-400 fill-amber-400/20' : ''} />
+            <span>Favorites</span>
+          </div>
+          <span className="text-xs bg-brand-border/50 px-2 py-0.5 rounded-full text-brand-textMuted font-bold">
+            {favoriteCount}
+          </span>
+        </button>
+      </div>
+
+      {/* Tags section */}
+      <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col min-h-0">
+        <div className="flex items-center justify-between px-2 mb-2">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-brand-textMuted">Tags</span>
+          <button
+            onClick={() => setIsAddingTag(!isAddingTag)}
+            className="p-1 rounded-md hover:bg-brand-card/70 text-brand-textMuted hover:text-brand-textMain transition-all"
+            title="Create new tag"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {/* Inline new tag form */}
+        {isAddingTag && (
+          <form onSubmit={handleAddTagSubmit} className="mb-2 px-2 flex gap-1">
+            <input
+              type="text"
+              value={newTagName}
+              onChange={(e) => setNewTagName(e.target.value)}
+              placeholder="Tag name..."
+              autoFocus
+              className="flex-1 bg-brand-card border border-brand-border px-2 py-1 rounded-lg text-xs text-brand-textMain placeholder-brand-textMuted/50 focus:outline-none focus:border-brand-accent/50"
+            />
+            <button
+              type="submit"
+              className="px-2 py-1 bg-brand-accent hover:bg-brand-accentLight rounded-lg text-xs text-white font-medium"
+            >
+              Add
+            </button>
+          </form>
+        )}
+
+        {/* Tag List */}
+        <div className="flex flex-col gap-0.5">
+          {tags.length === 0 ? (
+            <p className="text-xs text-brand-textMuted/50 italic px-2 py-3">No tags created yet.</p>
+          ) : (
+            tags.map((tag) => {
+              const count = getTagCount(tag.id);
+              const isActive = activeTag === tag.name;
+              return (
+                <div
+                  key={tag.id}
+                  className={`group flex items-center justify-between px-3 py-1.5 rounded-xl text-sm transition-all cursor-pointer select-none
+                    ${isActive
+                      ? 'bg-brand-card border border-brand-border/50 text-indigo-400 font-semibold'
+                      : 'text-brand-textMuted hover:bg-brand-card/30 hover:text-brand-textMain'
+                    }
+                  `}
+                  onClick={() => onSelectTag(isActive ? null : tag.name)}
+                >
+                  <div className="flex items-center gap-2">
+                    <Hash size={14} className="opacity-60" />
+                    <span className="truncate max-w-[130px]">{tag.name}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold bg-brand-border/30 group-hover:bg-brand-border/50 px-1.5 py-0.2 rounded-full text-brand-textMuted transition-colors">
+                      {count}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Delete tag #${tag.name}? This will remove it from all entries.`)) {
+                          onDeleteTag(tag.id);
+                        }
+                      }}
+                      className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-brand-border/50 text-brand-textMuted/60 hover:text-red-400 transition-all"
+                      title="Delete tag"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* User profile footer */}
+      <div className="p-4 border-t border-brand-border/40 bg-brand-card/20 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-brand-accent/20 border border-brand-accent/30 flex items-center justify-center font-bold text-brand-accentLight">
+            {user.email[0]?.toUpperCase() || 'U'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-brand-textMain truncate leading-none mb-1">Authenticated</p>
+            <p className="text-[10px] text-brand-textMuted truncate">{user.email}</p>
+          </div>
+        </div>
+        <button
+          onClick={onLogout}
+          className="flex items-center justify-center gap-2 w-full px-3 py-2 border border-brand-border/60 hover:border-red-500/30 hover:bg-red-500/5 text-xs text-brand-textMuted hover:text-red-400 rounded-xl font-medium transition-all"
+        >
+          <LogOut size={13} />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </aside>
+  );
+}
