@@ -133,10 +133,10 @@ export default function Auth({ onLogin }: AuthProps) {
             </button>
           </form>
 
-          {/* Day 1 Mock Notice */}
-          <div className="mt-6 p-3 text-[10px] text-center rounded-xl bg-brand-border/20 border border-brand-border/30 text-brand-textMuted/75 font-semibold">
-            Day 1 Build Mode: Enter any credentials to log in. Session will persist locally in browser cache.
-          </div>
+          {/* Privacy note */}
+          <p className="mt-6 text-[10px] text-center text-brand-textMuted/50 font-semibold leading-relaxed">
+            Your knowledge stays private. Data is stored locally in your browser.
+          </p>
         </div>
       </div>
     </div>

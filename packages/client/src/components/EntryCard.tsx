@@ -5,6 +5,7 @@ import TagBadge from './TagBadge';
 
 interface EntryCardProps {
   entry: Entry;
+  onViewDetail: (entry: Entry) => void;
   onEdit: (entry: Entry) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
@@ -13,6 +14,7 @@ interface EntryCardProps {
 
 export default function EntryCard({
   entry,
+  onViewDetail,
   onEdit,
   onDelete,
   onToggleFavorite,
@@ -62,7 +64,10 @@ export default function EntryCard({
   };
 
   return (
-    <div className={`glass-card p-5 flex flex-col justify-between entry-card-transition ${borderColor} relative overflow-hidden group`}>
+    <div
+      className={`glass-card p-5 flex flex-col justify-between entry-card-transition ${borderColor} relative overflow-hidden group cursor-pointer`}
+      onClick={() => onViewDetail(entry)}
+    >
       {/* Top Header Row */}
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-2">
@@ -72,7 +77,7 @@ export default function EntryCard({
         <div className="flex items-center gap-1">
           {/* Favorite button */}
           <button
-            onClick={() => onToggleFavorite(entry.id)}
+            onClick={(e) => { e.stopPropagation(); onToggleFavorite(entry.id); }}
             className="p-1.5 rounded-lg hover:bg-brand-border/40 text-brand-textMuted hover:text-amber-400 transition-colors"
             title={entry.is_favorite ? 'Remove from favorites' : 'Mark as favorite'}
           >
@@ -83,7 +88,7 @@ export default function EntryCard({
           </button>
           {/* Edit button */}
           <button
-            onClick={() => onEdit(entry)}
+            onClick={(e) => { e.stopPropagation(); onEdit(entry); }}
             className="p-1.5 rounded-lg hover:bg-brand-border/40 text-brand-textMuted hover:text-brand-textMain transition-colors"
             title="Edit entry"
           >
@@ -91,7 +96,8 @@ export default function EntryCard({
           </button>
           {/* Delete button */}
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               if (confirm('Are you sure you want to delete this entry?')) {
                 onDelete(entry.id);
               }
@@ -139,11 +145,12 @@ export default function EntryCard({
         {entry.tags && entry.tags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {entry.tags.map((tag) => (
-              <TagBadge
-                key={tag.id}
-                tag={tag}
-                onClick={onTagClick ? () => onTagClick(tag.name) : undefined}
-              />
+              <span key={tag.id} onClick={(e) => e.stopPropagation()}>
+                <TagBadge
+                  tag={tag}
+                  onClick={onTagClick ? () => onTagClick(tag.name) : undefined}
+                />
+              </span>
             ))}
           </div>
         )}
