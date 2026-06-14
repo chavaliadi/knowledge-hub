@@ -212,6 +212,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setActiveFilter('all');
   };
 
+  const handleSelectTag = (tagName: string | null) => {
+    setActiveTag(tagName);
+    setActiveCollectionId(null);
+  };
+
+  const handleSelectCollection = (collectionId: string | null) => {
+    setActiveCollectionId(collectionId);
+    setActiveTag(null);
+  };
+
   const activeSortLabel = SORT_OPTIONS.find((o) => o.value === sortOrder)?.label ?? 'Sort';
 
   return (
@@ -241,8 +251,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           entries={allRawEntries}
           activeTag={activeTag}
           activeCollectionId={activeCollectionId}
-          onSelectTag={(t) => { setActiveTag(t); setIsSidebarOpen(false); }}
-          onSelectCollection={(c) => { setActiveCollectionId(c); setIsSidebarOpen(false); }}
+          onSelectTag={(t) => { handleSelectTag(t); setIsSidebarOpen(false); }}
+          onSelectCollection={(c) => { handleSelectCollection(c); setIsSidebarOpen(false); }}
           onCreateTag={handleCreateTag}
           onCreateCollection={handleCreateCollection}
           onDeleteTag={handleDeleteTag}
@@ -402,7 +412,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   onDelete={handleDeleteEntry}
                   onToggleFavorite={handleToggleFavorite}
                   onTogglePin={handleTogglePin}
-                  onTagClick={setActiveTag}
+                  onTagClick={handleSelectTag}
                 />
               ))}
             </div>
@@ -418,7 +428,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           onEdit={handleEditClick}
           onDelete={handleDeleteEntry}
           onToggleFavorite={handleToggleFavorite}
-          onTagClick={setActiveTag}
+          onTagClick={handleSelectTag}
         />
       )}
 
