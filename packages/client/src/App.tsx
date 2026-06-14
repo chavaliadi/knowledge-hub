@@ -1,28 +1,46 @@
 import { useState, useEffect } from 'react';
 import Dashboard from './pages/Dashboard.tsx';
 import Auth from './pages/Auth.tsx';
+import { supabase } from './lib/supabase.ts';
 
 export default function App() {
   const [user, setUser] = useState<{ id: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check local storage for mock session on mount
-    const savedUser = localStorage.getItem('kh_mock_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
-    }
-    setLoading(false);
+    // 1. Fetch current session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+        });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    // 2. Register real auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+        });
+      } else {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const handleLogin = (email: string) => {
-    const mockUser = { id: 'user_' + Math.random().toString(36).substr(2, 9), email };
-    localStorage.setItem('kh_mock_user', JSON.stringify(mockUser));
-    setUser(mockUser);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('kh_mock_user');
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
 
@@ -42,7 +60,7 @@ export default function App() {
       {user ? (
         <Dashboard user={user} onLogout={handleLogout} />
       ) : (
-        <Auth onLogin={handleLogin} />
+        <Auth />
       )}
     </div>
   );

@@ -1,17 +1,10 @@
-// Day 1: Mock Supabase Client. This will be replaced with real @supabase/supabase-js on Day 2.
+import { createClient } from '@supabase/supabase-js';
 
-export const supabase = {
-  auth: {
-    getUser: async (_token?: string) => {
-      const savedUser = localStorage.getItem('kh_mock_user');
-      if (savedUser) {
-        return { data: { user: JSON.parse(savedUser) }, error: null };
-      }
-      return { data: { user: null }, error: new Error('No session') };
-    },
-    signOut: async () => {
-      localStorage.removeItem('kh_mock_user');
-      return { error: null };
-    }
-  }
-};
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.warn('Warning: VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY is not defined in frontend env.');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);

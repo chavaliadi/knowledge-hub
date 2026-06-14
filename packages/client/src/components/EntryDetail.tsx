@@ -1,7 +1,7 @@
 import { Entry } from '../lib/types';
 import {
   FileText, Bookmark, Code, Lightbulb, Globe,
-  Star, Edit, Trash2, X, ExternalLink, Calendar, Clock, Tag
+  Star, Edit, Trash2, X, ExternalLink, Calendar, Clock, Tag, Folder
 } from 'lucide-react';
 import TagBadge from './TagBadge';
 
@@ -109,9 +109,17 @@ export default function EntryDetail({
               {cfg.icon(18)}
             </div>
             <div>
-              <span className={`text-xs font-bold uppercase tracking-wider ${cfg.color}`}>
-                {cfg.label}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-bold uppercase tracking-wider ${cfg.color}`}>
+                  {cfg.label}
+                </span>
+                {entry.collection_name && (
+                  <div className="flex items-center gap-1 bg-brand-border/30 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-brand-textMuted uppercase tracking-wider">
+                    <Folder size={10} className="text-brand-textMuted/80" />
+                    <span>{entry.collection_name}</span>
+                  </div>
+                )}
+              </div>
               {entry.is_favorite && (
                 <div className="flex items-center gap-1 mt-0.5">
                   <Star size={10} className="text-amber-400 fill-amber-400" />

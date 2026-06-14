@@ -1,18 +1,15 @@
 import React, { useState } from 'react';
 import { BookOpen, ShieldAlert, Lock, Mail, ArrowRight } from 'lucide-react';
+import { supabase } from '../lib/supabase.ts';
 
-interface AuthProps {
-  onLogin: (email: string) => void;
-}
-
-export default function Auth({ onLogin }: AuthProps) {
+export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -22,11 +19,32 @@ export default function Auth({ onLogin }: AuthProps) {
     }
 
     setLoading(true);
-    // Simulate auth lag
-    setTimeout(() => {
+    try {
+      if (isLogin) {
+        // Sign in using Supabase client SDK
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password.trim(),
+        });
+        if (signInError) {
+          throw signInError;
+        }
+      } else {
+        // Sign up using Supabase client SDK
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
+          password: password.trim(),
+        });
+        if (signUpError) {
+          throw signUpError;
+        }
+        alert('Registration successful! Please check your email inbox if verification is enabled.');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Authentication failed. Please try again.');
+    } finally {
       setLoading(false);
-      onLogin(email.trim());
-    }, 800);
+    }
   };
 
   return (
@@ -135,7 +153,7 @@ export default function Auth({ onLogin }: AuthProps) {
 
           {/* Privacy note */}
           <p className="mt-6 text-[10px] text-center text-brand-textMuted/50 font-semibold leading-relaxed">
-            Your knowledge stays private. Data is stored locally in your browser.
+            Your knowledge stays private. Data is stored securely in your Supabase database.
           </p>
         </div>
       </div>

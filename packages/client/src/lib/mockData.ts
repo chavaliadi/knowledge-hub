@@ -21,6 +21,9 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     url: null,
     is_favorite: true,
     tags: [MOCK_TAGS[0]!, MOCK_TAGS[2]!, MOCK_TAGS[3]!], // redis, backend, system-design
+    collection_id: null,
+    collection_name: null,
+    is_pinned: false,
     created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString(), // 3 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString()
   },
@@ -33,6 +36,9 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     url: 'https://youtube.com/bullmq-tutorial',
     is_favorite: false,
     tags: [MOCK_TAGS[1]!, MOCK_TAGS[0]!, MOCK_TAGS[2]!], // bullmq, redis, backend
+    collection_id: null,
+    collection_name: null,
+    is_pinned: false,
     created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString(), // 2 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
   },
@@ -45,6 +51,9 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     url: null,
     is_favorite: true,
     tags: [MOCK_TAGS[1]!, MOCK_TAGS[2]!, MOCK_TAGS[6]!], // bullmq, backend, typescript
+    collection_id: null,
+    collection_name: null,
+    is_pinned: false,
     created_at: new Date(Date.now() - 3600000 * 12).toISOString(), // 12 hours ago
     updated_at: new Date(Date.now() - 3600000 * 12).toISOString()
   },
@@ -57,6 +66,9 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     url: null,
     is_favorite: true,
     tags: [MOCK_TAGS[4]!, MOCK_TAGS[6]!, MOCK_TAGS[7]!], // ai, typescript, database
+    collection_id: null,
+    collection_name: null,
+    is_pinned: false,
     created_at: new Date(Date.now() - 3600000 * 5).toISOString(), // 5 hours ago
     updated_at: new Date(Date.now() - 3600000 * 5).toISOString()
   },
@@ -69,6 +81,9 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     url: 'https://roadmap.sh/system-design',
     is_favorite: false,
     tags: [MOCK_TAGS[3]!, MOCK_TAGS[2]!], // system-design, backend
+    collection_id: null,
+    collection_name: null,
+    is_pinned: false,
     created_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString(), // 7 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString()
   },
@@ -81,6 +96,9 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     url: null,
     is_favorite: false,
     tags: [MOCK_TAGS[5]!], // dsa
+    collection_id: null,
+    collection_name: null,
+    is_pinned: false,
     created_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString(), // 5 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString()
   }

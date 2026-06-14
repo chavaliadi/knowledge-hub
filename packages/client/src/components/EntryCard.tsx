@@ -1,6 +1,5 @@
-
 import { Entry } from '../lib/types';
-import { FileText, Bookmark, Code, Lightbulb, Globe, Star, Edit, Trash2, ExternalLink } from 'lucide-react';
+import { FileText, Bookmark, Code, Lightbulb, Globe, Star, Edit, Trash2, ExternalLink, Pin, Folder } from 'lucide-react';
 import TagBadge from './TagBadge';
 
 interface EntryCardProps {
@@ -9,6 +8,7 @@ interface EntryCardProps {
   onEdit: (entry: Entry) => void;
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
+  onTogglePin?: (id: string) => void;
   onTagClick?: (tagName: string) => void;
 }
 
@@ -18,6 +18,7 @@ export default function EntryCard({
   onEdit,
   onDelete,
   onToggleFavorite,
+  onTogglePin,
   onTagClick
 }: EntryCardProps) {
   
@@ -65,16 +66,43 @@ export default function EntryCard({
 
   return (
     <div
-      className={`glass-card p-5 flex flex-col justify-between entry-card-transition ${borderColor} relative overflow-hidden group cursor-pointer`}
+      className={`glass-card p-5 flex flex-col justify-between entry-card-transition ${borderColor} relative overflow-hidden group cursor-pointer
+        ${entry.is_pinned ? 'border-r border-t border-brand-accent/30 shadow-md shadow-brand-accent/5' : ''}
+      `}
       onClick={() => onViewDetail(entry)}
     >
       {/* Top Header Row */}
       <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          {icon}
-          <span className="text-[10px] font-bold tracking-wider uppercase text-brand-textMuted/70">{label}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {icon}
+            <span className="text-[10px] font-bold tracking-wider uppercase text-brand-textMuted/70">{label}</span>
+          </div>
+          
+          {/* Collection tag if set */}
+          {entry.collection_name && (
+            <div className="flex items-center gap-1 bg-brand-border/30 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-brand-textMuted uppercase tracking-wider">
+              <Folder size={10} className="text-brand-textMuted/80" />
+              <span className="truncate max-w-[80px]">{entry.collection_name}</span>
+            </div>
+          )}
         </div>
+        
         <div className="flex items-center gap-1">
+          {/* Pin button */}
+          {onTogglePin && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onTogglePin(entry.id); }}
+              className="p-1.5 rounded-lg hover:bg-brand-border/40 text-brand-textMuted hover:text-indigo-400 transition-colors"
+              title={entry.is_pinned ? 'Unpin from top' : 'Pin to top'}
+            >
+              <Pin
+                size={14}
+                className={entry.is_pinned ? 'text-indigo-400 fill-indigo-400/20 rotate-45' : 'opacity-40 group-hover:opacity-100'}
+              />
+            </button>
+          )}
+          
           {/* Favorite button */}
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFavorite(entry.id); }}
@@ -111,7 +139,7 @@ export default function EntryCard({
       </div>
 
       {/* Title */}
-      <h3 className="text-base font-bold text-brand-textMain leading-snug tracking-tight mb-2 pr-4 group-hover:text-brand-accentLight transition-colors">
+      <h3 className="text-base font-bold text-brand-textMain leading-snug tracking-tight mb-2 pr-4 group-hover:text-brand-accentLight transition-colors flex items-center gap-1.5">
         {entry.title}
       </h3>
 

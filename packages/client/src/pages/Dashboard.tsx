@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Entry, Tag, EntryType } from '../lib/types';
+import { Entry, Tag, EntryType, Collection } from '../lib/types';
 import { api } from '../lib/api';
 import Sidebar from '../components/Sidebar';
 import TypeFilter from '../components/TypeFilter';
@@ -25,6 +25,8 @@ const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
 
 function sortEntries(entries: Entry[], order: SortOrder): Entry[] {
   return [...entries].sort((a, b) => {
+    if (a.is_pinned && !b.is_pinned) return -1;
+    if (!a.is_pinned && b.is_pinned) return 1;
     switch (order) {
       case 'newest': return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
@@ -37,12 +39,14 @@ function sortEntries(entries: Entry[], order: SortOrder): Entry[] {
 export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filter states
   const [selectedType, setSelectedType] = useState<EntryType | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites'>('all');
 
   // Sort
@@ -66,11 +70,15 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
       const fetchedTags = await api.getTags();
       setTags(fetchedTags);
 
+      const fetchedCols = await api.getCollections();
+      setCollections(fetchedCols);
+
       const resolvedTag = fetchedTags.find((t) => t.name === activeTag);
       const fetchedEntries = await api.searchEntries(
         searchQuery,
         selectedType === 'all' ? undefined : selectedType,
-        resolvedTag?.id
+        resolvedTag?.id,
+        activeCollectionId || undefined
       );
 
       const filtered = activeFilter === 'favorites'
@@ -83,7 +91,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedType, activeTag, activeFilter, sortOrder]);
+  }, [searchQuery, selectedType, activeTag, activeFilter, sortOrder, activeCollectionId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -119,8 +127,41 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     loadData();
   };
 
+  // Collection management
+  const handleCreateCollection = async (name: string) => {
+    try {
+      await api.createCollection(name);
+      const fetchedCols = await api.getCollections();
+      setCollections(fetchedCols);
+    } catch (err) {
+      console.error('Failed to create collection:', err);
+    }
+  };
+
+  const handleDeleteCollection = async (id: string) => {
+    try {
+      await api.deleteCollection(id);
+      if (activeCollectionId === id) {
+        setActiveCollectionId(null);
+      }
+      const fetchedCols = await api.getCollections();
+      setCollections(fetchedCols);
+      loadData();
+    } catch (err) {
+      console.error('Failed to delete collection:', err);
+    }
+  };
+
   // Entry CRUD
-  const handleSaveEntry = async (input: { title: string; content: string; type: EntryType; url: string; tag_ids: string[] }) => {
+  const handleSaveEntry = async (input: { 
+    title: string; 
+    content: string; 
+    type: EntryType; 
+    url: string; 
+    tag_ids: string[];
+    collection_id?: string | null;
+    is_pinned?: boolean;
+  }) => {
     try {
       if (editingEntry) {
         await api.updateEntry(editingEntry.id, input);
@@ -147,6 +188,17 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     loadData();
   };
 
+  const handleTogglePin = async (id: string) => {
+    try {
+      await api.togglePin(id);
+      // Update the detailEntry in place if it's open
+      setDetailEntry((prev) => prev?.id === id ? { ...prev, is_pinned: !prev.is_pinned } : prev);
+      loadData();
+    } catch (err) {
+      console.error('Failed to toggle pin:', err);
+    }
+  };
+
   const handleEditClick = (entry: Entry) => {
     setEditingEntry(entry);
     setIsFormOpen(true);
@@ -156,6 +208,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setSelectedType('all');
     setSearchQuery('');
     setActiveTag(null);
+    setActiveCollectionId(null);
     setActiveFilter('all');
   };
 
@@ -184,11 +237,16 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           user={user}
           onLogout={onLogout}
           tags={tags}
+          collections={collections}
           entries={allRawEntries}
           activeTag={activeTag}
+          activeCollectionId={activeCollectionId}
           onSelectTag={(t) => { setActiveTag(t); setIsSidebarOpen(false); }}
+          onSelectCollection={(c) => { setActiveCollectionId(c); setIsSidebarOpen(false); }}
           onCreateTag={handleCreateTag}
+          onCreateCollection={handleCreateCollection}
           onDeleteTag={handleDeleteTag}
+          onDeleteCollection={handleDeleteCollection}
           activeFilter={activeFilter}
           onSelectFilter={(f) => { setActiveFilter(f); setIsSidebarOpen(false); }}
         />
@@ -261,9 +319,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold tracking-tight text-brand-textMain">
-                {activeFilter === 'favorites' ? 'Favorite Saves' : activeTag ? `Tagged: #${activeTag}` : 'My Knowledge Base'}
+                {activeFilter === 'favorites' ? 'Favorite Saves' : activeTag ? `Tagged: #${activeTag}` : activeCollectionId ? `Collection: ${collections.find((c) => c.id === activeCollectionId)?.name || ''}` : 'My Knowledge Base'}
               </h2>
-              {(selectedType !== 'all' || searchQuery || activeTag || activeFilter !== 'all') && (
+              {(selectedType !== 'all' || searchQuery || activeTag || activeFilter !== 'all' || activeCollectionId) && (
                 <button
                   onClick={clearAllFilters}
                   className="flex items-center gap-1 text-xs font-bold text-brand-accentLight hover:underline"
@@ -278,7 +336,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
 
           {/* Active filter chips */}
-          {(activeTag || selectedType !== 'all' || activeFilter === 'favorites') && (
+          {(activeTag || selectedType !== 'all' || activeFilter === 'favorites' || activeCollectionId) && (
             <div className="flex flex-wrap items-center gap-1.5 bg-brand-card/20 p-2.5 rounded-xl border border-brand-border/20 text-xs">
               <span className="text-brand-textMuted font-bold mr-1 flex items-center gap-1">
                 <Filter size={11} />
@@ -297,6 +355,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               {activeTag && (
                 <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-semibold border border-emerald-500/20">
                   Tag: #{activeTag}
+                </span>
+              )}
+              {activeCollectionId && (
+                <span className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-md font-semibold border border-indigo-500/20">
+                  Collection: {collections.find((c) => c.id === activeCollectionId)?.name || 'Folder'}
                 </span>
               )}
             </div>
@@ -338,6 +401,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
                   onEdit={handleEditClick}
                   onDelete={handleDeleteEntry}
                   onToggleFavorite={handleToggleFavorite}
+                  onTogglePin={handleTogglePin}
                   onTagClick={setActiveTag}
                 />
               ))}
@@ -363,6 +427,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         <EntryForm
           entry={editingEntry}
           tags={tags}
+          collections={collections}
           onSave={handleSaveEntry}
           onClose={() => { setIsFormOpen(false); setEditingEntry(null); }}
           onCreateTag={handleCreateTag}

@@ -1,14 +1,45 @@
 import express from "express";
-import type { Request, Response } from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import path from "path";
+import { authMiddleware } from "./src/middleware/auth";
+import entriesRouter from "./src/routes/entries";
+import tagsRouter from "./src/routes/tags";
+import searchRouter from "./src/routes/search";
+import collectionsRouter from "./src/routes/collections";
+
+// Resolve environment variables from the project root .env
+dotenv.config({ path: path.resolve(__dirname, "../../.env") });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Enable CORS for frontend client
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true
+}));
+
+// Body parser
+app.use(express.json());
+
+// Public healthcheck route
 app.get('/', (req, res) => {
-  res.send(process.env.OPENAI_API_KEY ?? 'OPENAI_API_KEY not set');
+  res.json({ status: 'ok', service: 'KnowledgeHub API Server' });
+});
+
+// Mount protected API routes
+app.use('/entries', authMiddleware as any, entriesRouter);
+app.use('/tags', authMiddleware as any, tagsRouter);
+app.use('/search', authMiddleware as any, searchRouter);
+app.use('/collections', authMiddleware as any, collectionsRouter);
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error occurred' });
 });
 
 app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-})
-
+  console.log(`Server is running on http://localhost:${PORT}`);
+});

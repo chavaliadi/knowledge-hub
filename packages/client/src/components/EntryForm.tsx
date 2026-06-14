@@ -1,12 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Entry, Tag, EntryType } from '../lib/types';
+import { Entry, Tag, EntryType, Collection } from '../lib/types';
 import { X, FileText, Bookmark, Code, Lightbulb, Globe, Plus } from 'lucide-react';
 import TagBadge from './TagBadge';
 
 interface EntryFormProps {
   entry?: Entry | null; // If present, we are editing
   tags: Tag[];
-  onSave: (data: { title: string; content: string; type: EntryType; url: string; tag_ids: string[] }) => void;
+  collections: Collection[];
+  onSave: (data: { 
+    title: string; 
+    content: string; 
+    type: EntryType; 
+    url: string; 
+    tag_ids: string[];
+    collection_id?: string | null;
+    is_pinned?: boolean;
+  }) => void;
   onClose: () => void;
   onCreateTag: (name: string) => Promise<Tag>;
 }
@@ -14,6 +23,7 @@ interface EntryFormProps {
 export default function EntryForm({
   entry,
   tags,
+  collections = [],
   onSave,
   onClose,
   onCreateTag
@@ -23,6 +33,8 @@ export default function EntryForm({
   const [content, setContent] = useState('');
   const [url, setUrl] = useState('');
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const [collectionId, setCollectionId] = useState<string | null>(null);
+  const [isPinned, setIsPinned] = useState(false);
   
   const [newTagName, setNewTagName] = useState('');
   const [showAddTag, setShowAddTag] = useState(false);
@@ -36,12 +48,16 @@ export default function EntryForm({
       setContent(entry.content || '');
       setUrl(entry.url || '');
       setSelectedTagIds(entry.tags.map((t) => t.id));
+      setCollectionId(entry.collection_id || null);
+      setIsPinned(entry.is_pinned || false);
     } else {
       setTitle('');
       setType('note');
       setContent('');
       setUrl('');
       setSelectedTagIds([]);
+      setCollectionId(null);
+      setIsPinned(false);
     }
     setError('');
   }, [entry]);
@@ -89,7 +105,9 @@ export default function EntryForm({
       content: content.trim(),
       type,
       url: type === 'bookmark' ? url.trim() : '',
-      tag_ids: selectedTagIds
+      tag_ids: selectedTagIds,
+      collection_id: collectionId,
+      is_pinned: isPinned
     });
   };
 
@@ -195,6 +213,40 @@ export default function EntryForm({
               rows={type === 'snippet' ? 6 : 4}
               className="block w-full bg-brand-dark border border-brand-border px-3 py-2.5 rounded-xl text-sm text-brand-textMain placeholder-brand-textMuted/40 focus:outline-none focus:border-brand-accent/50 focus:bg-brand-dark/80 transition-all font-mono font-medium"
             />
+          </div>
+
+          {/* Collection Selector */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-brand-textMuted uppercase tracking-wider">Collection</label>
+            <select
+              value={collectionId || ''}
+              onChange={(e) => setCollectionId(e.target.value || null)}
+              className="block w-full bg-brand-dark border border-brand-border px-3 py-2.5 rounded-xl text-sm text-brand-textMain placeholder-brand-textMuted/40 focus:outline-none focus:border-brand-accent/50 focus:bg-brand-dark/80 transition-all font-medium"
+            >
+              <option value="">No Collection</option>
+              {collections.map((col) => (
+                <option key={col.id} value={col.id}>
+                  {col.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Pin to top Checkbox */}
+          <div className="flex items-center gap-2.5 py-1 select-none">
+            <input
+              type="checkbox"
+              id="isPinned"
+              checked={isPinned}
+              onChange={(e) => setIsPinned(e.target.checked)}
+              className="rounded bg-brand-dark border-brand-border text-brand-accent focus:ring-brand-accent/50 h-4 w-4"
+            />
+            <label 
+              htmlFor="isPinned" 
+              className="text-xs font-bold text-brand-textMuted uppercase tracking-wider cursor-pointer"
+            >
+              Pin to top
+            </label>
           </div>
 
           {/* Tags Manager */}
