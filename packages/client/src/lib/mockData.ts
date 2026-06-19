@@ -24,6 +24,7 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     collection_id: null,
     collection_name: null,
     is_pinned: false,
+    attachments: [],
     created_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString(), // 3 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 3).toISOString()
   },
@@ -39,6 +40,7 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     collection_id: null,
     collection_name: null,
     is_pinned: false,
+    attachments: [],
     created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString(), // 2 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
   },
@@ -54,6 +56,7 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     collection_id: null,
     collection_name: null,
     is_pinned: false,
+    attachments: [],
     created_at: new Date(Date.now() - 3600000 * 12).toISOString(), // 12 hours ago
     updated_at: new Date(Date.now() - 3600000 * 12).toISOString()
   },
@@ -69,6 +72,7 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     collection_id: null,
     collection_name: null,
     is_pinned: false,
+    attachments: [],
     created_at: new Date(Date.now() - 3600000 * 5).toISOString(), // 5 hours ago
     updated_at: new Date(Date.now() - 3600000 * 5).toISOString()
   },
@@ -84,6 +88,7 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     collection_id: null,
     collection_name: null,
     is_pinned: false,
+    attachments: [],
     created_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString(), // 7 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 7).toISOString()
   },
@@ -99,6 +104,7 @@ export const INITIAL_MOCK_ENTRIES: Entry[] = [
     collection_id: null,
     collection_name: null,
     is_pinned: false,
+    attachments: [],
     created_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString(), // 5 days ago
     updated_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString()
   }

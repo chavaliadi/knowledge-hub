@@ -12,6 +12,17 @@ export type Collection = {
   created_at: string;
 };
 
+export type Attachment = {
+  id: string;
+  user_id: string;
+  entry_id: string;
+  file_path: string;
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  created_at: string;
+};
+
 export type Entry = {
   id: string;
   user_id: string;
@@ -24,6 +35,7 @@ export type Entry = {
   collection_id: string | null;
   collection_name: string | null;
   is_pinned: boolean;
+  attachments: Attachment[];
   created_at: string;
   updated_at: string;
 };

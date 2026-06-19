@@ -12,7 +12,8 @@ const formatEntry = (entry: any) => {
     ? entry.entry_tags.map((et: any) => et.tag).filter(Boolean)
     : [];
   const collection_name = entry.collections ? entry.collections.name : null;
-  const formatted = { ...entry, tags, collection_name };
+  const attachments = entry.attachments || [];
+  const formatted = { ...entry, tags, collection_name, attachments };
   delete formatted.entry_tags;
   delete formatted.collections;
   return formatted;
@@ -44,7 +45,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     let dbQuery = supabase
       .from('entries')
-      .select('*, entry_tags(tag:tags(id, name)), collections(name)')
+      .select('*, entry_tags(tag:tags(id, name)), collections(name), attachments(*)')
       .eq('user_id', userId);
 
     if (type && typeof type === 'string' && type.trim()) {

@@ -1,7 +1,8 @@
 import { Entry } from '../lib/types';
 import {
   FileText, Bookmark, Code, Lightbulb, Globe,
-  Star, Edit, Trash2, X, ExternalLink, Calendar, Clock, Tag, Folder
+  Star, Edit, Trash2, X, ExternalLink, Calendar, Clock, Tag, Folder,
+  Paperclip, Download
 } from 'lucide-react';
 import TagBadge from './TagBadge';
 
@@ -211,6 +212,48 @@ export default function EntryDetail({
                   {entry.content}
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Attachments */}
+          {entry.attachments && entry.attachments.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Paperclip size={11} className="text-brand-textMuted" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-textMuted">
+                  Attachments
+                </span>
+                <div className="h-px flex-1 bg-brand-border/30" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {entry.attachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-brand-dark/40 border border-brand-border/40 text-xs font-semibold hover:border-brand-accent/40 hover:bg-brand-dark/60 transition-all select-none group"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <FileText size={14} className="text-brand-textMuted" />
+                      <div className="min-w-0">
+                        <span className="text-brand-textMain block truncate">{att.file_name}</span>
+                        <span className="text-[9px] text-brand-textMuted/65 block font-medium">
+                          {(att.file_size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+                    </div>
+                    <a
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        alert(`Downloading: ${att.file_name} (mock download link)`);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-brand-border/40 text-brand-textMuted hover:text-brand-accentLight transition-colors"
+                      title="Download file"
+                    >
+                      <Download size={12} />
+                    </a>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

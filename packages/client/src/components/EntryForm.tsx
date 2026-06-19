@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Entry, Tag, EntryType, Collection } from '../lib/types';
-import { X, FileText, Bookmark, Code, Lightbulb, Globe, Plus } from 'lucide-react';
+import { X, FileText, Bookmark, Code, Lightbulb, Globe, Plus, UploadCloud, File, Trash, Loader2 } from 'lucide-react';
 import TagBadge from './TagBadge';
 
 interface EntryFormProps {
@@ -15,6 +15,7 @@ interface EntryFormProps {
     tag_ids: string[];
     collection_id?: string | null;
     is_pinned?: boolean;
+    attachments?: any[];
   }) => void;
   onClose: () => void;
   onCreateTag: (name: string) => Promise<Tag>;
@@ -40,6 +41,9 @@ export default function EntryForm({
   const [showAddTag, setShowAddTag] = useState(false);
   const [error, setError] = useState('');
 
+  const [attachments, setAttachments] = useState<{ id: string; name: string; size: number; mimeType: string; progress: number; status: 'uploading' | 'completed' | 'failed' }[]>([]);
+  const [isDragActive, setIsDragActive] = useState(false);
+
   // Populate form if editing
   useEffect(() => {
     if (entry) {
@@ -50,6 +54,18 @@ export default function EntryForm({
       setSelectedTagIds(entry.tags.map((t) => t.id));
       setCollectionId(entry.collection_id || null);
       setIsPinned(entry.is_pinned || false);
+      if (entry.attachments) {
+        setAttachments(entry.attachments.map(att => ({
+          id: att.id,
+          name: att.file_name,
+          size: att.file_size,
+          mimeType: att.mime_type,
+          progress: 100,
+          status: 'completed'
+        })));
+      } else {
+        setAttachments([]);
+      }
     } else {
       setTitle('');
       setType('note');
@@ -58,6 +74,7 @@ export default function EntryForm({
       setSelectedTagIds([]);
       setCollectionId(null);
       setIsPinned(false);
+      setAttachments([]);
     }
     setError('');
   }, [entry]);
@@ -86,6 +103,71 @@ export default function EntryForm({
     }
   };
 
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setIsDragActive(true);
+    } else if (e.type === "dragleave") {
+      setIsDragActive(false);
+    }
+  };
+
+  const simulateUpload = (fileId: string) => {
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      setAttachments(prev => prev.map(att => {
+        if (att.id === fileId) {
+          if (progress >= 100) {
+            clearInterval(interval);
+            return { ...att, progress: 100, status: 'completed' };
+          }
+          return { ...att, progress };
+        }
+        return att;
+      }));
+    }, 200);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const files = Array.from(e.dataTransfer.files);
+      handleFiles(files);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const files = Array.from(e.target.files);
+      handleFiles(files);
+    }
+  };
+
+  const handleFiles = (files: File[]) => {
+    files.forEach(file => {
+      const fileId = Math.random().toString(36).substring(7);
+      const newAtt = {
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type,
+        progress: 0,
+        status: 'uploading' as const
+      };
+      setAttachments(prev => [...prev, newAtt]);
+      simulateUpload(fileId);
+    });
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments(prev => prev.filter(att => att.id !== id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -107,7 +189,14 @@ export default function EntryForm({
       url: type === 'bookmark' ? url.trim() : '',
       tag_ids: selectedTagIds,
       collection_id: collectionId,
-      is_pinned: isPinned
+      is_pinned: isPinned,
+      attachments: attachments.map(att => ({
+        id: att.id,
+        file_name: att.name,
+        file_size: att.size,
+        mime_type: att.mimeType,
+        file_path: `mock_path/${att.name}`
+      }))
     });
   };
 
@@ -247,6 +336,70 @@ export default function EntryForm({
             >
               Pin to top
             </label>
+          </div>
+
+          {/* File Attachments Dropzone */}
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-brand-textMuted uppercase tracking-wider">Attachments</label>
+            <div
+              onDragEnter={handleDrag}
+              onDragOver={handleDrag}
+              onDragLeave={handleDrag}
+              onDrop={handleDrop}
+              className={`relative flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl transition-all cursor-pointer bg-brand-dark/20
+                ${isDragActive 
+                  ? 'border-brand-accent bg-brand-accent/5 scale-[1.01]' 
+                  : 'border-brand-border/60 hover:border-brand-accent/40'
+                }
+              `}
+            >
+              <input
+                type="file"
+                multiple
+                onChange={handleFileInputChange}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <UploadCloud size={28} className={`mb-2 transition-colors ${isDragActive ? 'text-brand-accentLight' : 'text-brand-textMuted'}`} />
+              <p className="text-xs font-semibold text-brand-textMain text-center">
+                Drag and drop files here, or <span className="text-brand-accentLight hover:underline">browse</span>
+              </p>
+              <p className="text-[10px] text-brand-textMuted/65 mt-1">PDFs, images (Max 10MB)</p>
+            </div>
+
+            {/* Attachments List */}
+            {attachments.length > 0 && (
+              <div className="space-y-2 max-h-40 overflow-y-auto mt-2 p-1">
+                {attachments.map(att => (
+                  <div key={att.id} className="flex items-center justify-between p-2.5 rounded-xl bg-brand-dark/40 border border-brand-border/40 text-xs font-medium">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <File size={16} className="text-brand-textMuted shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-brand-textMain truncate font-semibold">{att.name}</p>
+                        <p className="text-[9px] text-brand-textMuted/70 font-semibold mt-0.5">
+                          {(att.size / 1024 / 1024).toFixed(2)} MB · {att.status}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      {att.status === 'uploading' && (
+                        <div className="flex items-center gap-1.5 text-brand-accentLight font-bold">
+                          <Loader2 size={12} className="animate-spin" />
+                          <span className="text-[10px]">{att.progress}%</span>
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachment(att.id)}
+                        className="p-1 rounded hover:bg-brand-border/40 text-brand-textMuted hover:text-red-400 transition-colors"
+                      >
+                        <Trash size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Tags Manager */}
