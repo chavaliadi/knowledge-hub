@@ -1,10 +1,12 @@
+import { useState, useEffect } from 'react';
 import { Entry } from '../lib/types';
 import {
   FileText, Bookmark, Code, Lightbulb, Globe,
   Star, Edit, Trash2, X, ExternalLink, Calendar, Clock, Tag, Folder,
-  Paperclip, Download
+  Paperclip, Download, Eye, Loader2
 } from 'lucide-react';
 import TagBadge from './TagBadge';
+import { supabase } from '../lib/supabase';
 
 interface EntryDetailProps {
   entry: Entry;
@@ -67,6 +69,37 @@ export default function EntryDetail({
   onTagClick,
 }: EntryDetailProps) {
   const cfg = typeConfig[entry.type];
+  const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSignedUrls = async () => {
+      if (!entry.attachments || entry.attachments.length === 0) return;
+      const urls: Record<string, string> = {};
+      for (const att of entry.attachments) {
+        try {
+          const { data } = await supabase.storage
+            .from('Knowledge-Hub')
+            .createSignedUrl(att.file_path, 300); // 5 minutes validity
+          if (data?.signedUrl) {
+            urls[att.id] = data.signedUrl;
+          }
+        } catch (err) {
+          console.error('Failed to create signed URL for attachment:', att.id, err);
+        }
+      }
+      setSignedUrls(urls);
+
+      // Auto-set the first PDF as the active preview
+      const firstPdf = entry.attachments.find(att => att.mime_type === 'application/pdf' || att.file_name.endsWith('.pdf'));
+      if (firstPdf && urls[firstPdf.id]) {
+        setActivePdfUrl(urls[firstPdf.id]);
+      }
+    };
+
+    fetchSignedUrls();
+  }, [entry]);
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, {
@@ -217,42 +250,123 @@ export default function EntryDetail({
 
           {/* Attachments */}
           {entry.attachments && entry.attachments.length > 0 && (
-            <div>
-              <div className="flex items-center gap-2 mb-3">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
                 <Paperclip size={11} className="text-brand-textMuted" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-brand-textMuted">
                   Attachments
                 </span>
                 <div className="h-px flex-1 bg-brand-border/30" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {entry.attachments.map((att) => (
-                  <div
-                    key={att.id}
-                    className="flex items-center justify-between p-2.5 rounded-xl bg-brand-dark/40 border border-brand-border/40 text-xs font-semibold hover:border-brand-accent/40 hover:bg-brand-dark/60 transition-all select-none group"
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <FileText size={14} className="text-brand-textMuted" />
-                      <div className="min-w-0">
-                        <span className="text-brand-textMain block truncate">{att.file_name}</span>
-                        <span className="text-[9px] text-brand-textMuted/65 block font-medium">
-                          {(att.file_size / 1024 / 1024).toFixed(2)} MB
-                        </span>
-                      </div>
-                    </div>
-                    <a
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        alert(`Downloading: ${att.file_name} (mock download link)`);
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-brand-border/40 text-brand-textMuted hover:text-brand-accentLight transition-colors"
-                      title="Download file"
-                    >
-                      <Download size={12} />
-                    </a>
+
+              {/* Images Grid / Gallery */}
+              {entry.attachments.some(att => att.mime_type.startsWith('image/')) && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-brand-textMuted/75 uppercase tracking-wider">Images</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {entry.attachments
+                      .filter(att => att.mime_type.startsWith('image/'))
+                      .map(att => (
+                        <div 
+                          key={att.id}
+                          onClick={() => signedUrls[att.id] && setLightboxImage(signedUrls[att.id])}
+                          className="relative aspect-video rounded-xl border border-brand-border/40 overflow-hidden cursor-zoom-in bg-brand-card/45 hover:border-brand-accent/50 group transition-all"
+                        >
+                          {signedUrls[att.id] ? (
+                            <img 
+                              src={signedUrls[att.id]} 
+                              alt={att.file_name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Loader2 size={16} className="animate-spin text-brand-textMuted" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Eye size={18} className="text-white" />
+                          </div>
+                        </div>
+                      ))}
                   </div>
-                ))}
+                </div>
+              )}
+
+              {/* Inline PDF Viewer */}
+              {entry.attachments.some(att => att.mime_type === 'application/pdf' || att.file_name.endsWith('.pdf')) && (
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold text-brand-textMuted/75 uppercase tracking-wider">Document Preview</span>
+                  {activePdfUrl ? (
+                    <div className="relative rounded-xl border border-brand-border/40 overflow-hidden bg-brand-card/25 shadow-inner">
+                      <iframe 
+                        src={`${activePdfUrl}#toolbar=0`}
+                        className="w-full h-[400px] border-none bg-brand-dark/50" 
+                        title="PDF document preview"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex h-40 items-center justify-center rounded-xl border border-brand-border/40 bg-brand-dark/20 text-brand-textMuted">
+                      <Loader2 size={24} className="animate-spin" />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Download / List of Files */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-brand-textMuted/75 uppercase tracking-wider">Files List</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {entry.attachments.map((att) => {
+                    const hasPdf = att.mime_type === 'application/pdf' || att.file_name.endsWith('.pdf');
+                    return (
+                      <div
+                        key={att.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-brand-dark/40 border border-brand-border/40 text-xs font-semibold hover:border-brand-accent/40 hover:bg-brand-dark/60 transition-all select-none group"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <FileText size={14} className="text-brand-textMuted" />
+                          <div className="min-w-0">
+                            <span className="text-brand-textMain block truncate">{att.file_name}</span>
+                            <span className="text-[9px] text-brand-textMuted/65 block font-medium">
+                              {(att.file_size / 1024 / 1024).toFixed(2)} MB
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          {hasPdf && signedUrls[att.id] && (
+                            <button
+                              type="button"
+                              onClick={() => setActivePdfUrl(signedUrls[att.id])}
+                              className={`p-1.5 rounded-lg border text-brand-textMuted transition-colors ${
+                                activePdfUrl === signedUrls[att.id]
+                                  ? 'bg-brand-accent/15 border-brand-accent/40 text-brand-accentLight'
+                                  : 'border-transparent hover:bg-brand-border/40 hover:text-brand-textMain'
+                              }`}
+                              title="Preview PDF"
+                            >
+                              <Eye size={12} />
+                            </button>
+                          )}
+                          {signedUrls[att.id] ? (
+                            <a
+                              href={signedUrls[att.id]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-lg hover:bg-brand-border/40 text-brand-textMuted hover:text-brand-accentLight transition-colors"
+                              title="Download file"
+                            >
+                              <Download size={12} />
+                            </a>
+                          ) : (
+                            <div className="p-1.5 text-brand-textMuted/30">
+                              <Loader2 size={12} className="animate-spin" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}
@@ -303,6 +417,26 @@ export default function EntryDetail({
           )}
         </div>
       </div>
+
+      {/* Image Lightbox Modal */}
+      {lightboxImage && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out animate-in fade-in duration-200"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button 
+            className="absolute top-4 right-4 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+            onClick={() => setLightboxImage(null)}
+          >
+            <X size={24} />
+          </button>
+          <img 
+            src={lightboxImage} 
+            alt="Enlarged view" 
+            className="max-w-[95%] max-h-[90vh] object-contain rounded-lg shadow-2xl animate-in zoom-in-95 duration-200"
+          />
+        </div>
+      )}
     </div>
   );
 }

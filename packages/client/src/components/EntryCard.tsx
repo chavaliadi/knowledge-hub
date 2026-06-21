@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Entry } from '../lib/types';
-import { FileText, Bookmark, Code, Lightbulb, Globe, Star, Edit, Trash2, ExternalLink, Pin, Folder } from 'lucide-react';
+import { FileText, Bookmark, Code, Lightbulb, Globe, Star, Edit, Trash2, ExternalLink, Pin, Folder, Paperclip } from 'lucide-react';
 import TagBadge from './TagBadge';
+import { supabase } from '../lib/supabase';
 
 interface EntryCardProps {
   entry: Entry;
@@ -21,6 +23,23 @@ export default function EntryCard({
   onTogglePin,
   onTagClick
 }: EntryCardProps) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const firstImage = entry.attachments?.find((att) => att.mime_type.startsWith('image/'));
+    if (firstImage) {
+      supabase.storage
+        .from('Knowledge-Hub')
+        .createSignedUrl(firstImage.file_path, 3600)
+        .then(({ data }) => {
+          if (data?.signedUrl) {
+            setImageUrl(data.signedUrl);
+          }
+        });
+    } else {
+      setImageUrl(null);
+    }
+  }, [entry.attachments]);
   
   // Icon and border configuration based on type
   const typeConfig = {
@@ -86,6 +105,21 @@ export default function EntryCard({
               <span className="truncate max-w-[80px]">{entry.collection_name}</span>
             </div>
           )}
+
+          {/* Attachments badge if present */}
+          {entry.attachments && entry.attachments.length > 0 && (
+            <div className="flex items-center gap-1 bg-brand-border/30 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-brand-textMuted uppercase tracking-wider" title={`${entry.attachments.length} file attachments`}>
+              <Paperclip size={10} className="text-brand-textMuted/80" />
+              <span>{entry.attachments.length}</span>
+            </div>
+          )}
+
+          {/* Similarity score match badge */}
+          {entry.similarity !== undefined && entry.similarity !== null && (
+            <div className="flex items-center gap-1 bg-purple-500/20 border border-purple-500/40 px-1.5 py-0.5 rounded-md text-[9px] font-bold text-purple-400 uppercase tracking-wider shadow-sm shadow-purple-500/5 select-none" title="AI Search Similarity Score">
+              <span>{Math.round(entry.similarity * 100)}% Match</span>
+            </div>
+          )}
         </div>
         
         <div className="flex items-center gap-1">
@@ -137,6 +171,13 @@ export default function EntryCard({
           </button>
         </div>
       </div>
+
+      {/* Thumbnail Image */}
+      {imageUrl && (
+        <div className="w-full aspect-video rounded-xl overflow-hidden border border-brand-border/40 mb-3 bg-brand-card/30">
+          <img src={imageUrl} alt="Attachment thumbnail" className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-300" />
+        </div>
+      )}
 
       {/* Title */}
       <h3 className="text-base font-bold text-brand-textMain leading-snug tracking-tight mb-2 pr-4 group-hover:text-brand-accentLight transition-colors flex items-center gap-1.5">

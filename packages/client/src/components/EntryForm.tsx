@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Entry, Tag, EntryType, Collection } from '../lib/types';
 import { X, FileText, Bookmark, Code, Lightbulb, Globe, Plus, UploadCloud, File, Trash, Loader2 } from 'lucide-react';
 import TagBadge from './TagBadge';
+import { supabase } from '../lib/supabase';
 
 interface EntryFormProps {
   entry?: Entry | null; // If present, we are editing
@@ -41,7 +42,7 @@ export default function EntryForm({
   const [showAddTag, setShowAddTag] = useState(false);
   const [error, setError] = useState('');
 
-  const [attachments, setAttachments] = useState<{ id: string; name: string; size: number; mimeType: string; progress: number; status: 'uploading' | 'completed' | 'failed' }[]>([]);
+  const [attachments, setAttachments] = useState<{ id: string; name: string; size: number; mimeType: string; progress: number; status: 'uploading' | 'completed' | 'failed'; file_path?: string }[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
 
   // Populate form if editing
@@ -61,7 +62,8 @@ export default function EntryForm({
           size: att.file_size,
           mimeType: att.mime_type,
           progress: 100,
-          status: 'completed'
+          status: 'completed',
+          file_path: att.file_path
         })));
       } else {
         setAttachments([]);
@@ -113,23 +115,6 @@ export default function EntryForm({
     }
   };
 
-  const simulateUpload = (fileId: string) => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 10;
-      setAttachments(prev => prev.map(att => {
-        if (att.id === fileId) {
-          if (progress >= 100) {
-            clearInterval(interval);
-            return { ...att, progress: 100, status: 'completed' };
-          }
-          return { ...att, progress };
-        }
-        return att;
-      }));
-    }, 200);
-  };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -148,8 +133,15 @@ export default function EntryForm({
     }
   };
 
-  const handleFiles = (files: File[]) => {
-    files.forEach(file => {
+  const handleFiles = async (files: File[]) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (!userId) {
+      setError('You must be logged in to upload files.');
+      return;
+    }
+
+    files.forEach(async (file) => {
       const fileId = Math.random().toString(36).substring(7);
       const newAtt = {
         id: fileId,
@@ -160,7 +152,51 @@ export default function EntryForm({
         status: 'uploading' as const
       };
       setAttachments(prev => [...prev, newAtt]);
-      simulateUpload(fileId);
+
+      try {
+        const fileExt = file.name.split('.').pop();
+        const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+        const filePath = `${userId}/${uniqueFileName}`;
+
+        // Simulated progressive upload state transitions
+        let progress = 10;
+        const progressInterval = setInterval(() => {
+          progress += 10;
+          if (progress >= 90) {
+            clearInterval(progressInterval);
+          } else {
+            setAttachments(prev => prev.map(att => 
+              att.id === fileId ? { ...att, progress } : att
+            ));
+          }
+        }, 100);
+
+        const { data, error: uploadError } = await supabase.storage
+          .from('Knowledge-Hub')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        clearInterval(progressInterval);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        setAttachments(prev => prev.map(att => 
+          att.id === fileId 
+            ? { ...att, progress: 100, status: 'completed', file_path: data.path } 
+            : att
+        ));
+      } catch (err: any) {
+        console.error('File upload failed:', err);
+        setAttachments(prev => prev.map(att => 
+          att.id === fileId 
+            ? { ...att, status: 'failed' } 
+            : att
+        ));
+      }
     });
   };
 
@@ -190,13 +226,14 @@ export default function EntryForm({
       tag_ids: selectedTagIds,
       collection_id: collectionId,
       is_pinned: isPinned,
-      attachments: attachments.map(att => ({
-        id: att.id,
-        file_name: att.name,
-        file_size: att.size,
-        mime_type: att.mimeType,
-        file_path: `mock_path/${att.name}`
-      }))
+      attachments: attachments
+        .filter(att => att.status === 'completed' && att.file_path)
+        .map(att => ({
+          file_name: att.name,
+          file_size: att.size,
+          mime_type: att.mimeType,
+          file_path: att.file_path!
+        }))
     });
   };
 

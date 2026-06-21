@@ -36,8 +36,16 @@ export type Entry = {
   collection_name: string | null;
   is_pinned: boolean;
   attachments: Attachment[];
+  similarity?: number;
   created_at: string;
   updated_at: string;
+};
+
+export type CreateAttachmentInput = {
+  file_name: string;
+  file_size: number;
+  mime_type: string;
+  file_path: string;
 };
 
 export type CreateEntryInput = {
@@ -48,4 +56,5 @@ export type CreateEntryInput = {
   tag_ids: string[];
   collection_id?: string | null;
   is_pinned?: boolean;
+  attachments?: CreateAttachmentInput[];
 };

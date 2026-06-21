@@ -48,6 +48,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'favorites'>('all');
+  const [aiSearch, setAiSearch] = useState(false);
 
   // Sort
   const [sortOrder, setSortOrder] = useState<SortOrder>('newest');
@@ -78,7 +79,8 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
         searchQuery,
         selectedType === 'all' ? undefined : selectedType,
         resolvedTag?.id,
-        activeCollectionId || undefined
+        activeCollectionId || undefined,
+        aiSearch
       );
 
       const filtered = activeFilter === 'favorites'
@@ -91,7 +93,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedType, activeTag, activeFilter, sortOrder, activeCollectionId]);
+  }, [searchQuery, selectedType, activeTag, activeFilter, sortOrder, activeCollectionId, aiSearch]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -161,6 +163,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     tag_ids: string[];
     collection_id?: string | null;
     is_pinned?: boolean;
+    attachments?: any[];
   }) => {
     try {
       if (editingEntry) {
@@ -210,6 +213,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
     setActiveTag(null);
     setActiveCollectionId(null);
     setActiveFilter('all');
+    setAiSearch(false);
   };
 
   const handleSelectTag = (tagName: string | null) => {
@@ -276,7 +280,12 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           </button>
 
           <div className="flex-1 max-w-lg">
-            <SearchBar value={searchQuery} onChange={setSearchQuery} />
+            <SearchBar 
+              value={searchQuery} 
+              onChange={setSearchQuery} 
+              aiSearch={aiSearch} 
+              onAiToggle={setAiSearch} 
+            />
           </div>
 
           {/* Sort control */}
@@ -331,7 +340,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               <h2 className="text-xl font-bold tracking-tight text-brand-textMain">
                 {activeFilter === 'favorites' ? 'Favorite Saves' : activeTag ? `Tagged: #${activeTag}` : activeCollectionId ? `Collection: ${collections.find((c) => c.id === activeCollectionId)?.name || ''}` : 'My Knowledge Base'}
               </h2>
-              {(selectedType !== 'all' || searchQuery || activeTag || activeFilter !== 'all' || activeCollectionId) && (
+              {(selectedType !== 'all' || searchQuery || activeTag || activeFilter !== 'all' || activeCollectionId || aiSearch) && (
                 <button
                   onClick={clearAllFilters}
                   className="flex items-center gap-1 text-xs font-bold text-brand-accentLight hover:underline"
@@ -346,7 +355,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
 
           {/* Active filter chips */}
-          {(activeTag || selectedType !== 'all' || activeFilter === 'favorites' || activeCollectionId) && (
+          {(activeTag || selectedType !== 'all' || activeFilter === 'favorites' || activeCollectionId || (aiSearch && searchQuery)) && (
             <div className="flex flex-wrap items-center gap-1.5 bg-brand-card/20 p-2.5 rounded-xl border border-brand-border/20 text-xs">
               <span className="text-brand-textMuted font-bold mr-1 flex items-center gap-1">
                 <Filter size={11} />
@@ -370,6 +379,11 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
               {activeCollectionId && (
                 <span className="bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-md font-semibold border border-indigo-500/20">
                   Collection: {collections.find((c) => c.id === activeCollectionId)?.name || 'Folder'}
+                </span>
+              )}
+              {aiSearch && searchQuery && (
+                <span className="bg-purple-500/10 text-purple-400 px-2 py-0.5 rounded-md font-semibold border border-purple-500/20">
+                  AI Mode: "{searchQuery}"
                 </span>
               )}
             </div>

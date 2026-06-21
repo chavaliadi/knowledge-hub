@@ -193,7 +193,7 @@ export const api = {
   },
 
   // Search API
-  searchEntries: async (q: string, type?: string, tagId?: string, collectionId?: string): Promise<Entry[]> => {
+  searchEntries: async (q: string, type?: string, tagId?: string, collectionId?: string, ai?: boolean): Promise<Entry[]> => {
     const headers = await getAuthHeaders();
     const params = new URLSearchParams();
     if (q) {
@@ -207,6 +207,9 @@ export const api = {
     }
     if (collectionId) {
       params.append('collectionId', collectionId);
+    }
+    if (ai) {
+      params.append('ai', 'true');
     }
     
     const queryStr = params.toString() ? `?${params.toString()}` : '';

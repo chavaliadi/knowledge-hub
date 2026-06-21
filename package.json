@@ -3,6 +3,11 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev:client": "bun --cwd packages/client dev",
+    "dev:server": "bun --cwd packages/server dev",
+    "dev": "bun run dev:server & bun run dev:client"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
