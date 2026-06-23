@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #0f172a;
+      color: #f8fafc;
+      box-sizing: border-box;
+    }
+
+    h2 {
+      margin: 0 0 12px 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-glow {
+      color: #6366f1;
+      text-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+    }
+
+    .subtitle {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      font-weight: 600;
+      margin-bottom: 16px;
+      margin-top: -8px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #94a3b8;
+      margin-bottom: 6px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      background-color: #1e293b;
+      border: 1px border #334155;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #f8fafc;
+      box-sizing: border-box;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #4f46e5;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+      font-family: inherit;
+    }
+
+    button {
+      width: 100%;
+      background-color: #4f46e5;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.15s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button:hover {
+      background-color: #6366f1;
+    }
+
+    button:disabled {
+      background-color: #334155;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    #status {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      text-align: center;
+      display: none;
+    }
+
+    .status-success {
+      background-color: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #34d399;
+    }
+
+    .status-error {
+      background-color: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #f87171;
+    }
+
+    .auth-toggle {
+      font-size: 10px;
+      color: #6366f1;
+      text-decoration: underline;
+      cursor: pointer;
+      text-align: right;
+      margin-bottom: 8px;
+    }
+
+    #auth-section {
+      display: none;
+      border-top: 1px solid #334155;
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h2>
+    <span class="brand-glow">⚡</span> KnowledgeHub Clipper
+  </h2>
+  <div class="subtitle">Quick Save Workstation</div>
+
+  <form id="clip-form">
+    <div class="form-group">
+      <label for="title">Title</label>
+      <input type="text" id="title" required>
+    </div>
+
+    <div class="form-group">
+      <label for="url">URL</label>
+      <input type="text" id="url" required>
+    </div>
+
+    <div class="form-group">
+      <label for="type">Category Type</label>
+      <select id="type">
+        <option value="bookmark">Bookmark</option>
+        <option value="note">Note</option>
+        <option value="snippet">Snippet</option>
+        <option value="idea">Project Idea</option>
+        <option value="resource" selected>Resource</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="content">Extracted Content / Notes</label>
+      <textarea id="content" placeholder="Paste snippet or text description here..."></textarea>
+    </div>
+
+    <div class="auth-toggle" id="auth-toggle">Configure Auth Token</div>
+    <div id="auth-section">
+      <div class="form-group">
+        <label for="token">Supabase JWT Auth Token</label>
+        <input type="password" id="token" placeholder="Bearer jwt token...">
+      </div>
+    </div>
+
+    <button type="submit" id="save-btn">Save to KnowledgeHub</button>
+  </form>
+
+  <div id="status"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

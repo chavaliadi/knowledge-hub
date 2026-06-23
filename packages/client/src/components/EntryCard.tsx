@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Entry } from '../lib/types';
-import { FileText, Bookmark, Code, Lightbulb, Globe, Star, Edit, Trash2, ExternalLink, Pin, Folder, Paperclip } from 'lucide-react';
+import { FileText, Bookmark, Code, Lightbulb, Globe, Star, Edit, Trash2, ExternalLink, Pin, Folder, Paperclip, Sparkles } from 'lucide-react';
 import TagBadge from './TagBadge';
 import { supabase } from '../lib/supabase';
 
@@ -184,6 +184,14 @@ export default function EntryCard({
         {entry.title}
       </h3>
 
+      {/* AI Summary if present */}
+      {entry.summary && (
+        <div className="mb-3 px-3 py-2 bg-indigo-500/5 rounded-xl border border-indigo-500/10 text-xs italic text-brand-textMuted/90 flex gap-1.5 items-start">
+          <Sparkles size={11} className="text-brand-accentLight shrink-0 mt-0.5" />
+          <span>{entry.summary}</span>
+        </div>
+      )}
+
       {/* Content Rendering based on type */}
       <div className="flex-1 text-sm text-brand-textMuted mb-4 leading-relaxed font-medium">
         {entry.type === 'snippet' && entry.content ? (
@@ -211,7 +219,7 @@ export default function EntryCard({
       {/* Footer Info (Tags & Date) */}
       <div className="flex flex-col gap-3 pt-3 border-t border-brand-border/20">
         {/* Tags */}
-        {entry.tags && entry.tags.length > 0 && (
+        {((entry.tags && entry.tags.length > 0) || (entry.ai_tags && entry.ai_tags.length > 0)) && (
           <div className="flex flex-wrap gap-1.5">
             {entry.tags.map((tag) => (
               <span key={tag.id} onClick={(e) => e.stopPropagation()}>
@@ -219,6 +227,20 @@ export default function EntryCard({
                   tag={tag}
                   onClick={onTagClick ? () => onTagClick(tag.name) : undefined}
                 />
+              </span>
+            ))}
+            {entry.ai_tags?.map((aiTag, idx) => (
+              <span
+                key={`ai-tag-${idx}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTagClick?.(aiTag);
+                }}
+                className="inline-flex items-center gap-1 bg-purple-500/10 border border-purple-500/25 px-2 py-0.5 rounded-full text-[10px] font-semibold text-purple-400 select-none hover:bg-purple-500/20"
+                title="AI Suggested Tag"
+              >
+                <Sparkles size={8} />
+                <span>{aiTag}</span>
               </span>
             ))}
           </div>

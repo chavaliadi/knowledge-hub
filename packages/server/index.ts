@@ -7,6 +7,7 @@ import entriesRouter from "./src/routes/entries";
 import tagsRouter from "./src/routes/tags";
 import searchRouter from "./src/routes/search";
 import collectionsRouter from "./src/routes/collections";
+import chatRouter from "./src/routes/chat";
 
 // Resolve environment variables from the project root .env
 dotenv.config({ path: path.resolve(__dirname, "../../.env") });
@@ -33,6 +34,7 @@ app.use('/entries', authMiddleware as any, entriesRouter);
 app.use('/tags', authMiddleware as any, tagsRouter);
 app.use('/search', authMiddleware as any, searchRouter);
 app.use('/collections', authMiddleware as any, collectionsRouter);
+app.use('/chat', authMiddleware as any, chatRouter);
 
 // Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

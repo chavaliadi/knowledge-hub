@@ -2,7 +2,8 @@ import { Router } from 'express';
 import { getSupabaseClient } from '../lib/supabase';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import type { Response } from 'express';
-import { getEmbedding } from '../lib/gemini';
+import { getEmbedding, getAISummaryAndTags } from '../lib/gemini';
+import { extractTextFromAttachment } from '../lib/attachments';
 
 const getEntryEmbedText = (title: string, type: string, content: string | null) => {
   return `Title: ${title}\nType: ${type}\nContent: ${content || ''}`;
@@ -142,13 +143,46 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
   }
 
   try {
-    // Generate embedding vector using Google Gemini
+    // Extract text from attachments if present
+    let attachmentsText = '';
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+      const extractedTexts = [];
+      for (const att of attachments) {
+        const text = await extractTextFromAttachment(supabase, att.file_path, att.mime_type, att.file_name);
+        if (text) {
+          extractedTexts.push(`[File: ${att.file_name}]\n${text}`);
+        }
+      }
+      if (extractedTexts.length > 0) {
+        attachmentsText = extractedTexts.join('\n\n');
+      }
+    }
+
+    // Generate embedding vector using Google Gemini (including attachment content)
     let embeddingVector: number[] | null = null;
     try {
-      const embedText = getEntryEmbedText(title, type, content);
+      let embedText = getEntryEmbedText(title, type, content);
+      if (attachmentsText) {
+        embedText += `\n\nAttachments Content:\n${attachmentsText}`;
+      }
       embeddingVector = await getEmbedding(embedText);
     } catch (embedErr: any) {
       console.error('Failed to generate embedding for new entry:', embedErr.message);
+    }
+
+    // Generate AI Summary and suggested tags (including attachment content preview)
+    let aiSummary: string | null = null;
+    let aiTags: string[] | null = null;
+    try {
+      let summaryText = content || '';
+      if (attachmentsText) {
+        summaryText += `\n[Attachments Content Preview]: ${attachmentsText.slice(0, 1000)}`;
+      }
+      const aiResult = await getAISummaryAndTags(title, type, summaryText);
+      aiSummary = aiResult.summary;
+      aiTags = aiResult.tags;
+    } catch (aiErr: any) {
+      console.error('Failed to generate AI summary/tags for entry:', aiErr.message);
     }
 
     // 1. Insert Entry
@@ -163,7 +197,9 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         is_favorite: false,
         collection_id: collection_id || null,
         is_pinned: !!is_pinned,
-        embedding: embeddingVector
+        embedding: embeddingVector,
+        summary: aiSummary,
+        ai_tags: aiTags
       })
       .select()
       .single();
@@ -241,13 +277,15 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
   const { title, content, type, url, tag_ids, is_favorite, collection_id, is_pinned, attachments } = req.body;
 
   try {
-    // If title, type, or content is updated, fetch the existing entry
-    // to build the complete text block for the new embedding.
+    // If text fields or attachments are updated, we need to regenerate embeddings and summary.
     let embeddingVector: number[] | undefined = undefined;
-    if (title !== undefined || type !== undefined || content !== undefined) {
+    let aiSummary: string | undefined = undefined;
+    let aiTags: string[] | undefined = undefined;
+    
+    if (title !== undefined || type !== undefined || content !== undefined || attachments !== undefined) {
       const { data: existingEntry, error: fetchErr } = await supabase
         .from('entries')
-        .select('title, type, content')
+        .select('title, type, content, attachments(*)')
         .eq('id', id)
         .eq('user_id', userId)
         .maybeSingle();
@@ -257,11 +295,43 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         const finalType = type !== undefined ? type : existingEntry.type;
         const finalContent = content !== undefined ? content : existingEntry.content;
         
+        // Final attachments to be embedded
+        const finalAttachments = attachments !== undefined ? attachments : (existingEntry.attachments || []);
+        
+        let attachmentsText = '';
+        if (finalAttachments && Array.isArray(finalAttachments) && finalAttachments.length > 0) {
+          const extractedTexts = [];
+          for (const att of finalAttachments) {
+            const text = await extractTextFromAttachment(supabase, att.file_path, att.mime_type || att.mimeType, att.file_name || att.name);
+            if (text) {
+              extractedTexts.push(`[File: ${att.file_name || att.name}]\n${text}`);
+            }
+          }
+          if (extractedTexts.length > 0) {
+            attachmentsText = extractedTexts.join('\n\n');
+          }
+        }
+
         try {
-          const embedText = getEntryEmbedText(finalTitle, finalType, finalContent);
+          let embedText = getEntryEmbedText(finalTitle, finalType, finalContent);
+          if (attachmentsText) {
+            embedText += `\n\nAttachments Content:\n${attachmentsText}`;
+          }
           embeddingVector = await getEmbedding(embedText);
         } catch (embedErr: any) {
           console.error('Failed to regenerate embedding on update:', embedErr.message);
+        }
+
+        try {
+          let summaryText = finalContent || '';
+          if (attachmentsText) {
+            summaryText += `\n[Attachments Content Preview]: ${attachmentsText.slice(0, 1000)}`;
+          }
+          const aiResult = await getAISummaryAndTags(finalTitle, finalType, summaryText);
+          aiSummary = aiResult.summary;
+          aiTags = aiResult.tags;
+        } catch (aiErr: any) {
+          console.error('Failed to regenerate AI summary/tags on update:', aiErr.message);
         }
       }
     }
@@ -276,6 +346,8 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     if (collection_id !== undefined) updateData.collection_id = collection_id || null;
     if (is_pinned !== undefined) updateData.is_pinned = is_pinned;
     if (embeddingVector !== undefined) updateData.embedding = embeddingVector;
+    if (aiSummary !== undefined) updateData.summary = aiSummary;
+    if (aiTags !== undefined) updateData.ai_tags = aiTags;
     updateData.updated_at = new Date().toISOString();
 
     const { data: updatedEntry, error: entryError } = await supabase

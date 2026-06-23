@@ -7,6 +7,7 @@ import SearchBar from '../components/SearchBar';
 import EntryCard from '../components/EntryCard';
 import EntryForm from '../components/EntryForm';
 import EntryDetail from '../components/EntryDetail';
+import ChatPanel from '../components/ChatPanel';
 import { Plus, X, Sparkles, Filter, ArrowUpDown, Menu } from 'lucide-react';
 
 type SortOrder = 'newest' | 'oldest' | 'az' | 'za';
@@ -457,6 +458,9 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
           onCreateTag={handleCreateTag}
         />
       )}
+
+      {/* Floating AI Chat Assistant */}
+      <ChatPanel onViewEntry={setDetailEntry} />
     </div>
   );
 }

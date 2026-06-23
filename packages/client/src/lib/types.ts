@@ -37,6 +37,8 @@ export type Entry = {
   is_pinned: boolean;
   attachments: Attachment[];
   similarity?: number;
+  summary?: string | null;
+  ai_tags?: string[] | null;
   created_at: string;
   updated_at: string;
 };

@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "start": "bun run index.ts",
-    "dev": "bun --watch run index.ts"
+    "dev": "bun --watch run index.ts",
+    "reindex": "bun run src/scripts/reindex.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -19,6 +20,7 @@
     "@supabase/supabase-js": "^2.108.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pdf-parse": "^2.4.5"
   }
 }

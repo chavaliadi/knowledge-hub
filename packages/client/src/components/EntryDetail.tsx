@@ -3,7 +3,7 @@ import { Entry } from '../lib/types';
 import {
   FileText, Bookmark, Code, Lightbulb, Globe,
   Star, Edit, Trash2, X, ExternalLink, Calendar, Clock, Tag, Folder,
-  Paperclip, Download, Eye, Loader2
+  Paperclip, Download, Eye, Loader2, Sparkles
 } from 'lucide-react';
 import TagBadge from './TagBadge';
 import { supabase } from '../lib/supabase';
@@ -220,6 +220,17 @@ export default function EntryDetail({
             </a>
           )}
 
+          {/* AI Summary */}
+          {entry.summary && (
+            <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/15 text-sm leading-relaxed text-brand-textMuted flex gap-2.5 items-start">
+              <Sparkles size={16} className="text-brand-accentLight shrink-0 mt-0.5 animate-pulse" />
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-accentLight block">AI Generated Summary</span>
+                <p className="italic font-medium">{entry.summary}</p>
+              </div>
+            </div>
+          )}
+
           {/* Content */}
           {entry.content && (
             <div>
@@ -372,7 +383,7 @@ export default function EntryDetail({
           )}
 
           {/* Tags */}
-          {entry.tags && entry.tags.length > 0 && (
+          {((entry.tags && entry.tags.length > 0) || (entry.ai_tags && entry.ai_tags.length > 0)) && (
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Tag size={11} className="text-brand-textMuted" />
@@ -395,6 +406,24 @@ export default function EntryDetail({
                         : undefined
                     }
                   />
+                ))}
+                {entry.ai_tags?.map((aiTag, idx) => (
+                  <span
+                    key={`ai-tag-detail-${idx}`}
+                    onClick={
+                      onTagClick
+                        ? () => {
+                            onTagClick(aiTag);
+                            onClose();
+                          }
+                        : undefined
+                    }
+                    className="inline-flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/25 hover:border-purple-500/40 px-3 py-1.5 rounded-xl text-xs font-semibold text-purple-400 cursor-pointer select-none transition-all"
+                    title="AI Suggested Tag"
+                  >
+                    <Sparkles size={10} className="text-purple-400" />
+                    <span>{aiTag}</span>
+                  </span>
                 ))}
               </div>
             </div>
