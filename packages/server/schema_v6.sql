@@ -14,7 +14,7 @@ create table if not exists public.knowledge_reports (
   generated_at timestamp with time zone default now() not null,
   overall_score integer not null,
   domain_scores jsonb not null,
-  missing_topics text[] not null,
+  missing_topics jsonb not null,
   insights text not null
 );
 
