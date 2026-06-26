@@ -54,6 +54,8 @@ const rerankCandidates = (
 
 // POST /chat - RAG endpoint returning SSE stream of response
 router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const t0 = Date.now();
+  let firstTokenLogged = false;
   const { message } = req.body;
 
   if (!message || typeof message !== 'string' || !message.trim()) {
@@ -224,6 +226,10 @@ Instructions:
               const parsedData = JSON.parse(jsonStr);
               const textChunk = parsedData.candidates?.[0]?.content?.parts?.[0]?.text || '';
               if (textChunk) {
+                if (!firstTokenLogged) {
+                  console.log(`Chat SSE - Time to first token chunk: ${Date.now() - t0}ms`);
+                  firstTokenLogged = true;
+                }
                 res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
               }
             } catch (err) {
@@ -241,6 +247,10 @@ Instructions:
         const parsedData = JSON.parse(jsonStr);
         const textChunk = parsedData.candidates?.[0]?.content?.parts?.[0]?.text || '';
         if (textChunk) {
+          if (!firstTokenLogged) {
+            console.log(`Chat SSE - Time to first token chunk: ${Date.now() - t0}ms`);
+            firstTokenLogged = true;
+          }
           res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
         }
       } catch (err) {}

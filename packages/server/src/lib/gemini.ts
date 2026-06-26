@@ -12,9 +12,10 @@ if (!GEMINI_API_KEY) {
 
 /**
  * Generates a 768-dimensional embedding vector for the provided text
- * using Google's text-embedding-004 model.
+ * using Google's gemini-embedding-001 model.
  */
 export async function getEmbedding(text: string): Promise<number[]> {
+  const t0 = Date.now();
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is missing from environment variables.');
   }
@@ -22,6 +23,7 @@ export async function getEmbedding(text: string): Promise<number[]> {
   const trimmedText = text.trim();
   if (!trimmedText) {
     // Return a zero-vector if the text is empty to prevent api errors
+    console.log(`Gemini API [getEmbedding]: ${Date.now() - t0}ms`);
     return new Array(768).fill(0);
   }
 
@@ -56,6 +58,7 @@ export async function getEmbedding(text: string): Promise<number[]> {
     throw new Error(`Unexpected embedding format or length received from Gemini API.`);
   }
 
+  console.log(`Gemini API [getEmbedding]: ${Date.now() - t0}ms`);
   return values;
 }
 
@@ -68,6 +71,7 @@ export async function getAISummaryAndTags(
   type: string,
   content: string | null
 ): Promise<{ summary: string; tags: string[] }> {
+  const t0 = Date.now();
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is missing from environment variables.');
   }
@@ -123,6 +127,7 @@ You MUST return a JSON object with EXACTLY this structure:
   }
 
   const parsed = JSON.parse(rawText.trim());
+  console.log(`Gemini API [getAISummaryAndTags]: ${Date.now() - t0}ms`);
   return {
     summary: parsed.summary || '',
     tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: string) => String(t).trim().toLowerCase()) : [],
@@ -146,6 +151,7 @@ export async function classifyEntryDomains(
   content: string | null,
   type: string
 ): Promise<string[]> {
+  const t0 = Date.now();
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is missing from environment variables.');
   }
@@ -197,17 +203,21 @@ If nothing matches, return:
   const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
 
   if (!rawText) {
+    console.log(`Gemini API [classifyEntryDomains]: ${Date.now() - t0}ms`);
     return [];
   }
 
   try {
     const parsed = JSON.parse(rawText.trim());
     if (Array.isArray(parsed.domains)) {
-      return parsed.domains.filter((d: string) => FIXED_DOMAINS.includes(d));
+      const resDomains = parsed.domains.filter((d: string) => FIXED_DOMAINS.includes(d));
+      console.log(`Gemini API [classifyEntryDomains]: ${Date.now() - t0}ms`);
+      return resDomains;
     }
   } catch (e) {
     console.error('Failed to parse domain classification response:', e);
   }
+  console.log(`Gemini API [classifyEntryDomains]: ${Date.now() - t0}ms`);
   return [];
 }
 
@@ -218,6 +228,7 @@ export async function generateInsightAndNextTopics(
   domainCounts: Record<string, number>,
   totalEntries: number
 ): Promise<{ insight: string; topics: { name: string; rationale: string }[] }> {
+  const t0 = Date.now();
   if (!GEMINI_API_KEY) {
     throw new Error('GEMINI_API_KEY is missing from environment variables.');
   }
@@ -278,6 +289,7 @@ You MUST respond with a JSON object matching this structure exactly:
   }
 
   const parsed = JSON.parse(rawText.trim());
+  console.log(`Gemini API [generateInsightAndNextTopics]: ${Date.now() - t0}ms`);
   return {
     insight: parsed.insight || '',
     topics: Array.isArray(parsed.topics) ? parsed.topics : []

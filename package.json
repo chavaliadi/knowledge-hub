@@ -6,7 +6,8 @@
   "scripts": {
     "dev:client": "bun --cwd packages/client dev",
     "dev:server": "bun --cwd packages/server dev",
-    "dev": "bun run dev:server & bun run dev:client"
+    "dev": "bun run dev:server & bun run dev:client",
+    "typecheck": "bun --cwd packages/client tsc --noEmit && bun --cwd packages/server tsc --noEmit"
   },
   "devDependencies": {
     "@types/bun": "latest"

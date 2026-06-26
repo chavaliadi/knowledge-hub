@@ -29,6 +29,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
   try {
     // 1. AI Semantic Search path
     if (ai === 'true' && q && typeof q === 'string' && q.trim()) {
+      const t0 = Date.now();
       let queryEmbedding: number[];
       try {
         queryEmbedding = await getEmbedding(q);
@@ -104,6 +105,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
           return (similarityMap.get(b.id) || 0) - (similarityMap.get(a.id) || 0);
         });
 
+      console.log(`AI Search path execution: ${Date.now() - t0}ms`);
       res.json(formattedResults);
       return;
     }

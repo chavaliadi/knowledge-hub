@@ -17,6 +17,7 @@ const FIXED_DOMAINS = [
 
 // GET /intelligence - Fetch intelligence report analytics
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const t0 = Date.now();
   const supabase = getSupabaseClient(req.headers.authorization);
   const userId = req.user!.id;
   const { refresh } = req.query;
@@ -38,6 +39,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         const oneDayMs = 24 * 60 * 60 * 1000;
         if (cacheAgeMs < oneDayMs) {
           console.log('Returning cached knowledge intelligence report.');
+          console.log(`Dashboard Report generation (cache hit): ${Date.now() - t0}ms`);
           res.json(cachedReport);
           return;
         }
@@ -171,6 +173,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       console.error('Failed to cache knowledge report in DB:', saveErr.message);
     }
 
+    console.log(`Dashboard Report generation (cache miss): ${Date.now() - t0}ms`);
     res.json(newReport || {
       user_id: userId,
       generated_at: new Date().toISOString(),
