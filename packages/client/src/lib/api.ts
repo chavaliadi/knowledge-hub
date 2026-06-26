@@ -218,5 +218,41 @@ export const api = {
       throw new Error(await res.text());
     }
     return res.json();
+  },
+
+  // Related Entries API
+  getRelatedEntries: async (id: string): Promise<Entry[]> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${BASE_URL}/entries/${id}/related`, { headers });
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    return res.json();
+  },
+
+  // Duplicate Check API
+  checkDuplicate: async (title: string, content: string): Promise<Entry | null> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${BASE_URL}/entries/check-duplicate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ title, content })
+    });
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    const data = await res.json();
+    return data.duplicate;
+  },
+
+  // Intelligence Dashboard API
+  getIntelligenceReport: async (refresh?: boolean): Promise<any> => {
+    const headers = await getAuthHeaders();
+    const query = refresh ? '?refresh=true' : '';
+    const res = await fetch(`${BASE_URL}/intelligence${query}`, { headers });
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    return res.json();
   }
 };

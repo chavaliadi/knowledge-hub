@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Tag, Entry, Collection } from '../lib/types';
-import { BookOpen, LogOut, Plus, Trash2, Hash, Star, Folder } from 'lucide-react';
+import { BookOpen, LogOut, Plus, Trash2, Hash, Star, Folder, Brain } from 'lucide-react';
 
 interface SidebarProps {
   user: { email: string };
@@ -16,8 +16,8 @@ interface SidebarProps {
   onCreateCollection: (name: string) => void;
   onDeleteTag: (id: string) => void;
   onDeleteCollection: (id: string) => void;
-  activeFilter: 'all' | 'favorites';
-  onSelectFilter: (filter: 'all' | 'favorites') => void;
+  activeFilter: 'all' | 'favorites' | 'intelligence';
+  onSelectFilter: (filter: 'all' | 'favorites' | 'intelligence') => void;
 }
 
 export default function Sidebar({
@@ -129,6 +129,25 @@ export default function Sidebar({
           <span className="text-xs bg-brand-border/50 px-2 py-0.5 rounded-full text-brand-textMuted font-bold">
             {favoriteCount}
           </span>
+        </button>
+
+        <button
+          onClick={() => {
+            onSelectFilter('intelligence');
+            onSelectTag(null);
+            onSelectCollection(null);
+          }}
+          className={`flex items-center justify-between w-full px-3 py-2 rounded-xl text-sm font-medium transition-all
+            ${activeFilter === 'intelligence' && !activeTag && !activeCollectionId
+              ? 'bg-purple-600/10 border border-purple-500/30 text-purple-400 shadow-sm'
+              : 'text-brand-textMuted hover:bg-brand-card/40 hover:text-brand-textMain hover:text-purple-400'
+            }
+          `}
+        >
+          <div className="flex items-center gap-2.5">
+            <Brain size={16} className={activeFilter === 'intelligence' ? 'text-purple-400' : ''} />
+            <span>AI Intelligence</span>
+          </div>
         </button>
       </div>
 

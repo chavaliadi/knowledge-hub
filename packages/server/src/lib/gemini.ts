@@ -129,3 +129,158 @@ You MUST return a JSON object with EXACTLY this structure:
   };
 }
 
+const FIXED_DOMAINS = [
+  'Backend',
+  'Frontend',
+  'AI/ML',
+  'System Design',
+  'Databases',
+  'DevOps/Cloud'
+];
+
+/**
+ * Classifies an entry into one or two core domains from our fixed list.
+ */
+export async function classifyEntryDomains(
+  title: string,
+  content: string | null,
+  type: string
+): Promise<string[]> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is missing from environment variables.');
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  const prompt = `Analyze this developer knowledge base entry:
+Title: ${title}
+Type: ${type}
+Content: ${content || 'No text content'}
+
+Classify this entry into one or more of these specific domains: ${FIXED_DOMAINS.join(', ')}.
+You MUST respond with a JSON object containing a "domains" key, which holds an array of matched domains (max 2 matched domains). E.g.
+{
+  "domains": ["Backend", "Databases"]
+}
+If nothing matches, return:
+{
+  "domains": []
+}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini classification API failed with status ${response.status}: ${errorText}`);
+  }
+
+  const result = (await response.json()) as any;
+  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!rawText) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawText.trim());
+    if (Array.isArray(parsed.domains)) {
+      return parsed.domains.filter((d: string) => FIXED_DOMAINS.includes(d));
+    }
+  } catch (e) {
+    console.error('Failed to parse domain classification response:', e);
+  }
+  return [];
+}
+
+/**
+ * Generates an insight and next topic suggestions from the user's domain analysis data.
+ */
+export async function generateInsightAndNextTopics(
+  domainCounts: Record<string, number>,
+  totalEntries: number
+): Promise<{ insight: string; topics: { name: string; rationale: string }[] }> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is missing from environment variables.');
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+
+  const summaryData = Object.entries(domainCounts)
+    .map(([domain, count]) => `- ${domain}: ${count} entries`)
+    .join('\n');
+
+  const prompt = `Analyze this developer's knowledge base state.
+They have a total of ${totalEntries} entries across these categories:
+${summaryData}
+
+Provide:
+1. One short, natural-language, technical summary insight (max 20 words, developer-focused, e.g. "Your database skills are solid, but you could document more of your system design learnings.")
+2. A list of 3 suggested concepts/technologies to study next, matching their domain profile, with a 1-sentence explanation of why it fits.
+
+You MUST respond with a JSON object matching this structure exactly:
+{
+  "insight": "insight text here",
+  "topics": [
+    { "name": "Topic/Tech Name", "rationale": "one sentence explaining why they should study it next" }
+  ]
+}`;
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: prompt,
+            },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: 'application/json',
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini insight API failed with status ${response.status}: ${errorText}`);
+  }
+
+  const result = (await response.json()) as any;
+  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!rawText) {
+    throw new Error('No text returned from Gemini insight API.');
+  }
+
+  const parsed = JSON.parse(rawText.trim());
+  return {
+    insight: parsed.insight || '',
+    topics: Array.isArray(parsed.topics) ? parsed.topics : []
+  };
+}
+

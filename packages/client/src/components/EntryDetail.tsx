@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import TagBadge from './TagBadge';
 import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 
 interface EntryDetailProps {
   entry: Entry;
@@ -15,6 +16,7 @@ interface EntryDetailProps {
   onDelete: (id: string) => void;
   onToggleFavorite: (id: string) => void;
   onTagClick?: (tagName: string) => void;
+  onViewRelated?: (entry: Entry) => void;
 }
 
 const typeConfig = {
@@ -67,11 +69,29 @@ export default function EntryDetail({
   onDelete,
   onToggleFavorite,
   onTagClick,
+  onViewRelated,
 }: EntryDetailProps) {
   const cfg = typeConfig[entry.type];
   const [signedUrls, setSignedUrls] = useState<Record<string, string>>({});
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [activePdfUrl, setActivePdfUrl] = useState<string | null>(null);
+  const [relatedEntries, setRelatedEntries] = useState<Entry[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+
+  useEffect(() => {
+    const fetchRelated = async () => {
+      setLoadingRelated(true);
+      try {
+        const related = await api.getRelatedEntries(entry.id);
+        setRelatedEntries(related);
+      } catch (err) {
+        console.error('Failed to load related entries:', err);
+      } finally {
+        setLoadingRelated(false);
+      }
+    };
+    fetchRelated();
+  }, [entry.id]);
 
   useEffect(() => {
     const fetchSignedUrls = async () => {
@@ -124,6 +144,55 @@ export default function EntryDetail({
     onEdit(entry);
   };
 
+  const handleExplainWithAI = () => {
+    const event = new CustomEvent('trigger-ai-chat', {
+      detail: {
+        text: `Explain the concept of "${entry.title}" and connect it to my existing notes.`,
+        autoSend: true
+      }
+    });
+    window.dispatchEvent(event);
+    onClose();
+  };
+
+  const handleExportMarkdown = () => {
+    const tagsList = entry.tags.map(t => t.name).join(', ');
+    const aiTagsList = entry.ai_tags?.join(', ') || '';
+    const fileAttachments = entry.attachments?.map(att => `- [${att.file_name}](path: ${att.file_path}) (${(att.file_size/1024/1024).toFixed(2)} MB)`).join('\n') || 'None';
+    
+    const markdownContent = `---
+title: "${entry.title}"
+type: "${entry.type}"
+collection: "${entry.collection_name || 'None'}"
+tags: [${tagsList}]
+ai_tags: [${aiTagsList}]
+created_at: "${entry.created_at}"
+updated_at: "${entry.updated_at}"
+---
+
+# ${entry.title}
+
+${entry.content || ''}
+
+${entry.url ? `**URL**: [${entry.url}](${entry.url})` : ''}
+
+${entry.summary ? `## AI Summary\n*${entry.summary}*\n` : ''}
+
+## Attachments
+${fileAttachments}
+`;
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${entry.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark/80 backdrop-blur-sm"
@@ -165,6 +234,23 @@ export default function EntryDetail({
 
           {/* Action buttons */}
           <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleExplainWithAI}
+              className="p-2 rounded-xl border border-brand-border/40 text-brand-textMuted hover:text-purple-400 hover:bg-purple-500/10 hover:border-purple-500/20 transition-all flex items-center gap-1.5 shadow-sm"
+              title="Explain with AI"
+            >
+              <Sparkles size={14} className="text-purple-400" />
+              <span className="text-xs font-semibold hidden sm:inline">Explain</span>
+            </button>
+            <button
+              onClick={handleExportMarkdown}
+              className="p-2 rounded-xl border border-brand-border/40 text-brand-textMuted hover:text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-500/20 transition-all flex items-center gap-1.5 shadow-sm"
+              title="Export as Markdown"
+            >
+              <Download size={14} className="text-emerald-400" />
+              <span className="text-xs font-semibold hidden sm:inline">Export</span>
+            </button>
+            <div className="w-px h-5 bg-brand-border/40 mx-0.5" />
             <button
               onClick={() => onToggleFavorite(entry.id)}
               className={`p-2 rounded-xl border transition-all ${
@@ -426,6 +512,58 @@ export default function EntryDetail({
                   </span>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Related Entries */}
+          {(loadingRelated || relatedEntries.length > 0) && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles size={11} className="text-purple-400" />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-brand-textMuted">
+                  Related Saves
+                </span>
+                <div className="h-px flex-1 bg-brand-border/30" />
+              </div>
+
+              {loadingRelated ? (
+                <div className="flex items-center gap-2 text-xs text-brand-textMuted py-2">
+                  <Loader2 size={12} className="animate-spin" />
+                  <span>Finding similar saves...</span>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {relatedEntries.map((related) => {
+                    const relatedCfg = typeConfig[related.type];
+                    return (
+                      <div
+                        key={related.id}
+                        onClick={() => onViewRelated?.(related)}
+                        className="flex items-start gap-3 p-3 rounded-xl bg-brand-dark/40 border border-brand-border/40 hover:border-brand-accent/40 hover:bg-brand-dark/70 transition-all cursor-pointer group"
+                      >
+                        <div className="mt-0.5 p-1 rounded-lg bg-brand-card border border-brand-border/35 group-hover:border-brand-accent/30">
+                          {relatedCfg.icon(14)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-xs font-bold text-brand-textMain group-hover:text-brand-accentLight transition-colors block truncate" title={related.title}>
+                            {related.title}
+                          </span>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[9px] font-semibold text-brand-textMuted/70 uppercase">
+                              {relatedCfg.label}
+                            </span>
+                            {related.similarity !== undefined && (
+                              <span className="text-[9px] font-bold text-purple-400">
+                                · {Math.round(related.similarity * 100)}% Match
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>

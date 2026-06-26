@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Entry, Tag, EntryType, Collection } from '../lib/types';
-import { X, FileText, Bookmark, Code, Lightbulb, Globe, Plus, UploadCloud, File, Trash, Loader2 } from 'lucide-react';
+import { X, FileText, Bookmark, Code, Lightbulb, Globe, Plus, UploadCloud, File, Trash, Loader2, AlertTriangle } from 'lucide-react';
 import TagBadge from './TagBadge';
 import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 
 interface EntryFormProps {
   entry?: Entry | null; // If present, we are editing
@@ -20,6 +21,7 @@ interface EntryFormProps {
   }) => void;
   onClose: () => void;
   onCreateTag: (name: string) => Promise<Tag>;
+  onOpenEntry?: (entry: Entry) => void;
 }
 
 export default function EntryForm({
@@ -28,7 +30,8 @@ export default function EntryForm({
   collections = [],
   onSave,
   onClose,
-  onCreateTag
+  onCreateTag,
+  onOpenEntry
 }: EntryFormProps) {
   const [title, setTitle] = useState('');
   const [type, setType] = useState<EntryType>('note');
@@ -44,6 +47,9 @@ export default function EntryForm({
 
   const [attachments, setAttachments] = useState<{ id: string; name: string; size: number; mimeType: string; progress: number; status: 'uploading' | 'completed' | 'failed'; file_path?: string }[]>([]);
   const [isDragActive, setIsDragActive] = useState(false);
+
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [duplicateWarning, setDuplicateWarning] = useState<Entry | null>(null);
 
   // Populate form if editing
   useEffect(() => {
@@ -204,20 +210,7 @@ export default function EntryForm({
     setAttachments(prev => prev.filter(att => att.id !== id));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!title.trim()) {
-      setError('Title is required.');
-      return;
-    }
-
-    if (type === 'bookmark' && !url.trim()) {
-      setError('URL is required for bookmarks.');
-      return;
-    }
-
+  const executeSave = () => {
     onSave({
       title: title.trim(),
       content: content.trim(),
@@ -235,6 +228,40 @@ export default function EntryForm({
           file_path: att.file_path!
         }))
     });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!title.trim()) {
+      setError('Title is required.');
+      return;
+    }
+
+    if (type === 'bookmark' && !url.trim()) {
+      setError('URL is required for bookmarks.');
+      return;
+    }
+
+    // Run duplicate check only if creating a new entry (not editing)
+    if (!entry) {
+      setCheckingDuplicate(true);
+      try {
+        const duplicate = await api.checkDuplicate(title.trim(), content.trim());
+        if (duplicate) {
+          setDuplicateWarning(duplicate);
+          setCheckingDuplicate(false);
+          return; // Stop execution to show duplicate alert modal
+        }
+      } catch (err) {
+        console.error('Failed to run duplicate check:', err);
+      } finally {
+        setCheckingDuplicate(false);
+      }
+    }
+
+    executeSave();
   };
 
   const typesList: { value: EntryType; label: string; icon: React.ReactNode }[] = [
@@ -505,12 +532,78 @@ export default function EntryForm({
           </button>
           <button
             onClick={handleSubmit}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-sm text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/10 hover:shadow-indigo-600/20 hover:scale-[1.01] transition-all select-none"
+            disabled={checkingDuplicate}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:pointer-events-none text-sm text-white font-semibold rounded-xl shadow-lg shadow-indigo-600/10 hover:shadow-indigo-600/20 hover:scale-[1.01] transition-all select-none flex items-center gap-1.5"
           >
-            {entry ? 'Save Changes' : 'Save Entry'}
+            {checkingDuplicate && <Loader2 size={14} className="animate-spin text-white" />}
+            <span>{entry ? 'Save Changes' : checkingDuplicate ? 'Checking duplicates...' : 'Save Entry'}</span>
           </button>
         </div>
       </div>
+
+      {/* Duplicate Warning Modal */}
+      {duplicateWarning && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="glass-card w-full max-w-md p-6 border border-amber-500/30 bg-brand-dark/95 shadow-xl shadow-amber-500/5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 text-amber-400 mb-4">
+              <AlertTriangle size={24} className="animate-pulse" />
+              <h3 className="text-lg font-bold text-brand-textMain leading-tight">Similar Save Found!</h3>
+            </div>
+            
+            <p className="text-sm text-brand-textMuted leading-relaxed mb-4">
+              We found a highly similar entry in your library:
+            </p>
+
+            <div className="p-3.5 rounded-xl bg-brand-card/40 border border-brand-border/40 mb-5 flex items-start gap-3">
+              <div className="p-1 rounded-lg bg-brand-dark border border-brand-border/30">
+                <FileText size={14} className="text-brand-accentLight" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold text-brand-textMain block truncate">
+                  {duplicateWarning.title}
+                </span>
+                {duplicateWarning.similarity !== undefined && (
+                  <span className="text-[10px] font-bold text-purple-400 block mt-0.5 uppercase tracking-wider">
+                    {Math.round(duplicateWarning.similarity * 100)}% Similarity Match
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDuplicateWarning(null)}
+                className="px-3.5 py-1.5 border border-brand-border text-xs text-brand-textMuted hover:text-brand-textMain hover:bg-brand-card rounded-lg font-semibold transition-all select-none"
+              >
+                Go Back
+              </button>
+              {onOpenEntry && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenEntry(duplicateWarning);
+                    setDuplicateWarning(null);
+                  }}
+                  className="px-3.5 py-1.5 bg-brand-accent/20 hover:bg-brand-accent/30 border border-brand-accent/35 text-brand-accentLight text-xs font-semibold rounded-lg transition-all select-none"
+                >
+                  Open Existing
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateWarning(null);
+                  executeSave();
+                }}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg shadow-lg shadow-indigo-600/10 transition-all select-none"
+              >
+                Create Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

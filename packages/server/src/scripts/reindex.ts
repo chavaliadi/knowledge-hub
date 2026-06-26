@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '../lib/supabase';
-import { getEmbedding, getAISummaryAndTags } from '../lib/gemini';
+import { getEmbedding, getAISummaryAndTags, classifyEntryDomains } from '../lib/gemini';
 
 // Helper function to reconstruct the text format for embedding
 const getEntryEmbedText = (title: string, type: string, content: string | null) => {
@@ -10,21 +10,21 @@ const getEntryEmbedText = (title: string, type: string, content: string | null) 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function reindex() {
-  console.log('--- Starting Embedding & AI Summary Re-indexer Script ---');
+  console.log('--- Starting Embedding & AI Summary/Domain Re-indexer Script ---');
 
   try {
-    // 1. Fetch entries missing an embedding OR missing a summary
+    // 1. Fetch entries missing an embedding OR missing a summary OR missing domains
     const { data: entries, error } = await supabaseAdmin
       .from('entries')
-      .select('id, title, type, content, embedding, summary, ai_tags')
-      .or('embedding.is.null,summary.is.null');
+      .select('id, title, type, content, embedding, summary, ai_tags, domains')
+      .or('embedding.is.null,summary.is.null,domains.is.null');
 
     if (error) {
       throw new Error(`Failed to fetch entries: ${error.message}`);
     }
 
     if (!entries || entries.length === 0) {
-      console.log('No entries missing embeddings or summaries found. All up to date.');
+      console.log('No entries missing embeddings, summaries, or domains found. All up to date.');
       return;
     }
 
@@ -34,7 +34,7 @@ async function reindex() {
     let failureCount = 0;
 
     for (const entry of entries) {
-      const { id, title, type, content, embedding, summary } = entry;
+      const { id, title, type, content, embedding, summary, domains } = entry;
       console.log(`Processing entry: "${title}" (ID: ${id})`);
 
       const updateData: any = {};
@@ -53,6 +53,12 @@ async function reindex() {
           const aiResult = await getAISummaryAndTags(title, type, content);
           updateData.summary = aiResult.summary;
           updateData.ai_tags = aiResult.tags;
+        }
+
+        // If domains are missing, regenerate them
+        if (domains === null) {
+          console.log(`- Generating missing domain classification for ID ${id}`);
+          updateData.domains = await classifyEntryDomains(title, content, type);
         }
 
         if (Object.keys(updateData).length > 0) {
@@ -75,7 +81,7 @@ async function reindex() {
       }
 
       // Throttle API requests (Gemini API rate limit safeguard)
-      await delay(250);
+      await delay(300);
     }
 
     console.log('--- Re-indexing & Recovery Completed ---');

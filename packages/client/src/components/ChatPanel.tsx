@@ -71,18 +71,15 @@ export default function ChatPanel({ onViewEntry }: ChatPanelProps) {
     }
   };
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isGenerating) return;
-
-    const userMessageText = input.trim();
-    setInput('');
+  const submitMessage = async (messageText: string) => {
+    if (isGenerating) return;
+    setIsGenerating(false); // Reset just in case
     setIsGenerating(true);
 
     const userMessage: Message = {
       id: Math.random().toString(36).substring(7),
       role: 'user',
-      text: userMessageText,
+      text: messageText,
     };
 
     const assistantMsgId = Math.random().toString(36).substring(7);
@@ -106,7 +103,7 @@ export default function ChatPanel({ onViewEntry }: ChatPanelProps) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: userMessageText }),
+        body: JSON.stringify({ message: messageText }),
       });
 
       if (!response.ok) {
@@ -204,6 +201,36 @@ export default function ChatPanel({ onViewEntry }: ChatPanelProps) {
       setIsGenerating(false);
     }
   };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || isGenerating) return;
+    const msg = input.trim();
+    setInput('');
+    submitMessage(msg);
+  };
+
+  // Add event listener for trigger-ai-chat to let other components open the chat with context
+  useEffect(() => {
+    const handleTriggerChat = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const { text, autoSend } = customEvent.detail || {};
+      
+      setIsOpen(true);
+      if (text) {
+        if (autoSend) {
+          submitMessage(text);
+        } else {
+          setInput(text);
+        }
+      }
+    };
+
+    window.addEventListener('trigger-ai-chat', handleTriggerChat as EventListener);
+    return () => {
+      window.removeEventListener('trigger-ai-chat', handleTriggerChat as EventListener);
+    };
+  }, [isGenerating]);
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">

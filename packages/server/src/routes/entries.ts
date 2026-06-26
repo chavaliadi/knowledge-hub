@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { getSupabaseClient } from '../lib/supabase';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import type { Response } from 'express';
-import { getEmbedding, getAISummaryAndTags } from '../lib/gemini';
+import { getEmbedding, getAISummaryAndTags, classifyEntryDomains } from '../lib/gemini';
 import { extractTextFromAttachment } from '../lib/attachments';
 
 const getEntryEmbedText = (title: string, type: string, content: string | null) => {
@@ -185,6 +185,14 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       console.error('Failed to generate AI summary/tags for entry:', aiErr.message);
     }
 
+    // Generate domains classification using Gemini
+    let entryDomains: string[] | null = null;
+    try {
+      entryDomains = await classifyEntryDomains(title, content, type);
+    } catch (classErr: any) {
+      console.error('Failed to classify entry domains:', classErr.message);
+    }
+
     // 1. Insert Entry
     const { data: newEntry, error: entryError } = await supabase
       .from('entries')
@@ -199,7 +207,8 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         is_pinned: !!is_pinned,
         embedding: embeddingVector,
         summary: aiSummary,
-        ai_tags: aiTags
+        ai_tags: aiTags,
+        domains: entryDomains
       })
       .select()
       .single();
@@ -281,6 +290,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     let embeddingVector: number[] | undefined = undefined;
     let aiSummary: string | undefined = undefined;
     let aiTags: string[] | undefined = undefined;
+    let entryDomains: string[] | undefined = undefined;
     
     if (title !== undefined || type !== undefined || content !== undefined || attachments !== undefined) {
       const { data: existingEntry, error: fetchErr } = await supabase
@@ -333,6 +343,12 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         } catch (aiErr: any) {
           console.error('Failed to regenerate AI summary/tags on update:', aiErr.message);
         }
+
+        try {
+          entryDomains = await classifyEntryDomains(finalTitle, finalContent, finalType);
+        } catch (classErr: any) {
+          console.error('Failed to regenerate domains on update:', classErr.message);
+        }
       }
     }
 
@@ -348,6 +364,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     if (embeddingVector !== undefined) updateData.embedding = embeddingVector;
     if (aiSummary !== undefined) updateData.summary = aiSummary;
     if (aiTags !== undefined) updateData.ai_tags = aiTags;
+    if (entryDomains !== undefined) updateData.domains = entryDomains;
     updateData.updated_at = new Date().toISOString();
 
     const { data: updatedEntry, error: entryError } = await supabase
@@ -537,6 +554,144 @@ router.delete('/:id', async (req: AuthenticatedRequest, res: Response): Promise<
     }
 
     res.json({ message: 'Entry successfully deleted' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// GET /entries/:id/related - Fetch up to 5 similar entries for context
+router.get('/:id/related', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const supabase = getSupabaseClient(req.headers.authorization);
+  const userId = req.user!.id;
+  const { id } = req.params;
+
+  try {
+    // 1. Fetch current entry's embedding
+    const { data: entry, error: fetchError } = await supabase
+      .from('entries')
+      .select('embedding')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) {
+      res.status(500).json({ error: fetchError.message });
+      return;
+    }
+
+    if (!entry || !entry.embedding) {
+      res.json([]);
+      return;
+    }
+
+    // 2. Query similarity matches
+    const { data: matchedRows, error: rpcError } = await supabase.rpc('match_entries', {
+      query_embedding: entry.embedding,
+      match_threshold: 0.75, // threshold tuned for topic relations
+      match_count: 6, // 5 + 1 buffer for self
+    });
+
+    if (rpcError) {
+      res.status(500).json({ error: `RPC match_entries failed: ${rpcError.message}` });
+      return;
+    }
+
+    // 3. Filter out self and limit to 5
+    const relatedIds = (matchedRows || [])
+      .filter((r: any) => r.id !== id)
+      .slice(0, 5)
+      .map((r: any) => r.id);
+
+    if (relatedIds.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    // 4. Fetch complete entry details for related items
+    const { data: fullEntries, error: getFullError } = await supabase
+      .from('entries')
+      .select('*, entry_tags(tag:tags(id, name)), collections(name), attachments(*)')
+      .in('id', relatedIds);
+
+    if (getFullError) {
+      res.status(500).json({ error: getFullError.message });
+      return;
+    }
+
+    // Map matched score back to full entry lists
+    const similarityMap = new Map<string, number>(
+      matchedRows.map((r: any) => [r.id, r.similarity] as [string, number])
+    );
+
+    const formattedResults = (fullEntries || [])
+      .map((item: any) => {
+        const formatted = formatEntry(item);
+        return {
+          ...formatted,
+          similarity: similarityMap.get(item.id)
+        };
+      })
+      .sort((a: any, b: any) => (similarityMap.get(b.id) || 0) - (similarityMap.get(a.id) || 0));
+
+    res.json(formattedResults);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Internal server error' });
+  }
+});
+
+// POST /entries/check-duplicate - Check for duplicates synchronously
+router.post('/check-duplicate', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  const { title, content } = req.body;
+
+  if (!title || typeof title !== 'string' || !title.trim()) {
+    res.status(400).json({ error: 'Title is required for duplicate check.' });
+    return;
+  }
+
+  try {
+    const supabase = getSupabaseClient(req.headers.authorization);
+    
+    // 1. Generate text embedding synchronously using the title and content
+    const embedText = `Title: ${title.trim()}\nType: note\nContent: ${(content || '').trim()}`;
+    const queryEmbedding = await getEmbedding(embedText);
+
+    // 2. Call pgvector similarity search RPC
+    const { data: matchedRows, error: rpcError } = await supabase.rpc('match_entries', {
+      query_embedding: queryEmbedding,
+      match_threshold: 0.92, // High threshold for near-duplicate identification
+      match_count: 1
+    });
+
+    if (rpcError) {
+      res.status(500).json({ error: `Similarity RPC failed: ${rpcError.message}` });
+      return;
+    }
+
+    if (!matchedRows || matchedRows.length === 0) {
+      res.json({ duplicate: null });
+      return;
+    }
+
+    // 3. Retrieve populated details for the duplicate item
+    const duplicateRow = matchedRows[0];
+    const { data: fullEntry, error: fetchError } = await supabase
+      .from('entries')
+      .select('*, entry_tags(tag:tags(id, name)), collections(name), attachments(*)')
+      .eq('id', duplicateRow.id)
+      .maybeSingle();
+
+    if (fetchError || !fullEntry) {
+      res.json({ duplicate: null });
+      return;
+    }
+
+    const formatted = formatEntry(fullEntry);
+    res.json({
+      duplicate: {
+        ...formatted,
+        similarity: duplicateRow.similarity
+      }
+    });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Internal server error' });
   }
