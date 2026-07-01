@@ -7,6 +7,17 @@ import { getEmbedding } from '../lib/gemini';
 const router = Router();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
+/**
+ * Stable Groq model ID for streaming fallback.
+ * Using llama-3.3-70b-versatile (GA) — verified against Groq's live model list.
+ * Note: The SSE failover below only covers pre-stream failures (Gemini returns non-2xx
+ * before any data is read). Mid-stream failures (Gemini 429 after partial tokens are
+ * already sent to the client) are not recoverable — the user will see a truncated
+ * response. This is a known limitation; full mid-stream recovery would require
+ * buffering the entire response before flushing, which defeats streaming latency.
+ */
+const GROQ_STREAM_MODEL = 'llama-3.3-70b-versatile';
+
 // Hybrid search / reranking helper
 const rerankCandidates = (
   candidates: any[],
@@ -169,7 +180,7 @@ Instructions:
 3. If the provided sources do not contain sufficient info to answer the question, state exactly: "I couldn't find any information about that in your saved knowledge. Please check your query or add relevant notes." Do not synthesize from generic LLM knowledge in this case.
 4. Keep the answer clear, structured, and developer-focused. Include markdown code blocks if the sources contain relevant snippets.`;
 
-    // 5. Call Gemini stream API
+    // 5. Call Gemini stream API with fallback to Groq
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
     
     const requestBody = {
@@ -184,76 +195,163 @@ Instructions:
       }
     };
 
-    const geminiResponse = await fetch(geminiUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
+    let useGroq = false;
+    let geminiResponse: globalThis.Response | null = null;
 
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text();
-      console.error(`Gemini stream API failed: ${geminiResponse.status} - ${errorText}`);
-      res.write(`data: ${JSON.stringify({ error: 'Gemini service communication error.' })}\n\n`);
-      res.end();
-      return;
+    if (GEMINI_API_KEY) {
+      try {
+        geminiResponse = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestBody)
+        });
+        if (!geminiResponse.ok) {
+          console.warn(`Gemini stream API returned non-200 status (${geminiResponse.status}). Triggering failover to Groq...`);
+          useGroq = true;
+        }
+      } catch (err: any) {
+        console.error('Gemini stream API request failed, triggering failover to Groq:', err.message || err);
+        useGroq = true;
+      }
+    } else {
+      useGroq = true;
     }
 
-    if (!geminiResponse.body) {
-      res.write(`data: ${JSON.stringify({ error: 'Gemini response body stream is missing.' })}\n\n`);
-      res.end();
-      return;
-    }
+    if (useGroq) {
+      const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+      if (!GROQ_API_KEY) {
+        res.write(`data: ${JSON.stringify({ error: 'Both Gemini and Groq (fallback) providers are unconfigured or failed.' })}\n\n`);
+        res.end();
+        return;
+      }
 
-    const reader = geminiResponse.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+      console.log('Chat Route: Falling back to Groq completions stream...');
+      const groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
+      
+      const groqBody = {
+        model: GROQ_STREAM_MODEL,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: message }
+        ],
+        temperature: 0.2,
+        stream: true
+      };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      const groqResponse = await fetch(groqUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_API_KEY}`
+        },
+        body: JSON.stringify(groqBody)
+      });
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep partial line in buffer
+      if (!groqResponse.ok) {
+        const errorText = await groqResponse.text();
+        console.error(`Groq stream API failed: ${groqResponse.status} - ${errorText}`);
+        res.write(`data: ${JSON.stringify({ error: 'Groq failover service communication error.' })}\n\n`);
+        res.end();
+        return;
+      }
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr) {
-            try {
-              const parsedData = JSON.parse(jsonStr);
-              const textChunk = parsedData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-              if (textChunk) {
-                if (!firstTokenLogged) {
-                  console.log(`Chat SSE - Time to first token chunk: ${Date.now() - t0}ms`);
-                  firstTokenLogged = true;
+      if (!groqResponse.body) {
+        res.write(`data: ${JSON.stringify({ error: 'Groq response body stream is missing.' })}\n\n`);
+        res.end();
+        return;
+      }
+
+      const reader = groqResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep partial line in buffer
+
+        for (const line of lines) {
+          const cleanedLine = line.trim();
+          if (cleanedLine.startsWith('data: ')) {
+            const jsonStr = cleanedLine.slice(6).trim();
+            if (jsonStr === '[DONE]') {
+              break;
+            }
+            if (jsonStr) {
+              try {
+                const parsedData = JSON.parse(jsonStr);
+                const textChunk = parsedData.choices?.[0]?.delta?.content || '';
+                if (textChunk) {
+                  if (!firstTokenLogged) {
+                    console.log(`Chat SSE (Groq) - Time to first token chunk: ${Date.now() - t0}ms`);
+                    firstTokenLogged = true;
+                  }
+                  res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
                 }
-                res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
+              } catch (err) {
+                // Ignore parsing errors
               }
-            } catch (err) {
-              // Ignore lines that aren't valid JSON (e.g. stream boundaries)
             }
           }
         }
       }
-    }
+    } else {
+      if (!geminiResponse || !geminiResponse.body) {
+        res.write(`data: ${JSON.stringify({ error: 'Gemini response body stream is missing.' })}\n\n`);
+        res.end();
+        return;
+      }
 
-    // Flush any remaining buffer if applicable
-    if (buffer && buffer.startsWith('data: ')) {
-      const jsonStr = buffer.slice(6).trim();
-      try {
-        const parsedData = JSON.parse(jsonStr);
-        const textChunk = parsedData.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (textChunk) {
-          if (!firstTokenLogged) {
-            console.log(`Chat SSE - Time to first token chunk: ${Date.now() - t0}ms`);
-            firstTokenLogged = true;
+      const reader = geminiResponse.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // Keep partial line in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const jsonStr = line.slice(6).trim();
+            if (jsonStr) {
+              try {
+                const parsedData = JSON.parse(jsonStr);
+                const textChunk = parsedData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                if (textChunk) {
+                  if (!firstTokenLogged) {
+                    console.log(`Chat SSE (Gemini) - Time to first token chunk: ${Date.now() - t0}ms`);
+                    firstTokenLogged = true;
+                  }
+                  res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
+                }
+              } catch (err) {
+                // Ignore parser issues
+              }
+            }
           }
-          res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
         }
-      } catch (err) {}
+      }
+
+      // Flush any remaining buffer if applicable
+      if (buffer && buffer.startsWith('data: ')) {
+        const jsonStr = buffer.slice(6).trim();
+        try {
+          const parsedData = JSON.parse(jsonStr);
+          const textChunk = parsedData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          if (textChunk) {
+            res.write(`data: ${JSON.stringify({ text: textChunk })}\n\n`);
+          }
+        } catch (err) {}
+      }
     }
 
     res.write(`data: ${JSON.stringify({ done: true })}\n\n`);

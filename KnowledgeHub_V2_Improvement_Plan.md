@@ -94,12 +94,12 @@ A noisy "related" list (showing things that obviously aren't related) will kill 
 It's tempting to show "✓ Redis ✓ BullMQ ✓ Workers" under each related entry. One catch: a cosine similarity score doesn't actually contain that information — you can't extract "shared concepts" from a single number. If you want this later, build it as a **tag/keyword-overlap proxy computed once at save time** (not a live Gemini call per view, which reintroduces the exact "AI on every page load" problem this plan is designed to avoid). Be clear with yourself that this approximates the embedding match, it doesn't explain it.
 
 ### Checklist
-- [ ] `GET /related` endpoint built
-- [ ] Tested manually with real entry IDs
-- [ ] Threshold tuned with known related/unrelated pairs, value documented
-- [ ] Related strip added to `EntryDetail.tsx`
-- [ ] Empty state handled
-- [ ] Loading state doesn't block the rest of the page
+- [x] `GET /related` endpoint built
+- [x] Tested manually with real entry IDs
+- [x] Threshold tuned with known related/unrelated pairs, value documented
+- [x] Related strip added to `EntryDetail.tsx`
+- [x] Empty state handled
+- [x] Loading state doesn't block the rest of the page
 
 ---
 
@@ -157,12 +157,12 @@ router.post('/check-duplicate', async (req, res) => {
 Same approach as Module 1 — test with a couple of entries you know are near-duplicates and a couple you know are just topically related (but not duplicates). Make sure 0.92 actually separates "same note" from "related note." Adjust and document the final value.
 
 ### Checklist
-- [ ] `POST /check-duplicate` endpoint built
-- [ ] Sync embedding generation confirmed working
-- [ ] Threshold tuned (start at 0.92), value documented
-- [ ] Modal added to `EntryForm.tsx` submit flow
-- [ ] "Open existing" and "Create anyway" both work
-- [ ] Merge explicitly deferred — not built in v1
+- [x] `POST /check-duplicate` endpoint built
+- [x] Sync embedding generation confirmed working
+- [x] Threshold tuned (start at 0.92), value documented
+- [x] Modal added to `EntryForm.tsx` submit flow
+- [x] "Open existing" and "Create anyway" both work
+- [x] Merge explicitly deferred — not built in v1
 
 ---
 
@@ -246,16 +246,16 @@ Reuse your existing card/badge styling from `EntryCard.tsx` — don't design a n
 These are real ideas but they roughly double the build time for marginal benefit. Add them later only if the core dashboard proves useful in daily use.
 
 ### Checklist
-- [ ] Fixed domain list decided
-- [ ] Classification backfill script run on existing entries
-- [ ] New entries auto-classified going forward
-- [ ] Score formula designed and documented (so you can explain it)
-- [ ] Score displayed as band + number + popover, not a bare %
-- [ ] `GET /api/intelligence` endpoint built
-- [ ] `knowledge_reports` table created, caching working
-- [ ] "Generated [time]" + manual refresh button shown in UI
-- [ ] Dashboard page built with score + domains + next topics + insight
-- [ ] Tested with both a near-empty account and a full one
+- [x] Fixed domain list decided
+- [x] Classification backfill script run on existing entries
+- [x] New entries auto-classified going forward
+- [x] Score formula designed and documented (so you can explain it)
+- [x] Score displayed as band + number + popover, not a bare %
+- [x] `GET /api/intelligence` endpoint built
+- [x] `knowledge_reports` table created, caching working
+- [x] "Generated [time]" + manual refresh button shown in UI
+- [x] Dashboard page built with score + domains + next topics + insight
+- [x] Tested with both a near-empty account and a full one
 
 ---
 
@@ -284,11 +284,11 @@ These are real ideas but they roughly double the build time for marginal benefit
 Add an "Explain This" button on `EntryDetail.tsx`. On click, either open the existing chat panel pre-filled with the prompt, or show the explanation inline below the entry — whichever is less work given what you find in the check-first step above.
 
 ### Checklist
-- [ ] Checked whether `ChatPanel.tsx` / `/chat` already covers this
-- [ ] Decided: reuse existing chat vs. new endpoint
-- [ ] If new: endpoint built, references related entries
-- [ ] Button added to `EntryDetail.tsx`
-- [ ] Tested that explanations actually reference the user's own notes, not just generic AI output
+- [x] Checked whether `ChatPanel.tsx` / `/chat` already covers this
+- [x] Decided: reuse existing chat vs. new endpoint
+- [x] If new: endpoint built, references related entries
+- [x] Button added to `EntryDetail.tsx`
+- [x] Tested that explanations actually reference the user's own notes, not just generic AI output
 
 ---
 
@@ -307,9 +307,9 @@ Add an "Explain This" button on `EntryDetail.tsx`. On click, either open the exi
 This is mostly frontend work — formatting + triggering a browser download. No backend changes needed if you build the markdown string client-side from data you already have loaded.
 
 ### Checklist
-- [ ] Single-entry Markdown export working
-- [ ] Collection export (optional)
-- [ ] JSON export (optional)
+- [x] Single-entry Markdown export working
+- [x] Collection export (optional)
+- [x] JSON export (optional)
 
 ---
 
@@ -366,10 +366,10 @@ KnowledgeHub V2 is complete when:
 
 | Module | Time | Status |
 |---|---|---|
-| 1. Related Entries | 2-3 days | ☐ |
-| 2. Duplicate Detection | 1-2 days | ☐ |
-| 3. Knowledge Intelligence Dashboard | 5-7 days | ☐ |
-| 4. Explain This | 0.5-1 day | ☐ |
-| 5. Export | 0.5 day | ☐ |
+| 1. Related Entries | 2-3 days | ☑ |
+| 2. Duplicate Detection | 1-2 days | ☑ |
+| 3. Knowledge Intelligence Dashboard | 5-7 days | ☑ |
+| 4. Explain This | 0.5-1 day | ☑ |
+| 5. Export | 0.5 day | ☑ |
 
 **Total: roughly 9-13 days of focused work**, spread out — not a single sprint. Fit it around your July/August commitments (System Design Visualizer, CodeVitals, aggregator+bot, MCP linter, ECE projects) rather than instead of them.

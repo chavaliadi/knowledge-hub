@@ -641,7 +641,7 @@ router.get('/:id/related', async (req: AuthenticatedRequest, res: Response): Pro
 
 // POST /entries/check-duplicate - Check for duplicates synchronously
 router.post('/check-duplicate', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
-  const { title, content } = req.body;
+  const { title, content, type } = req.body;
 
   if (!title || typeof title !== 'string' || !title.trim()) {
     res.status(400).json({ error: 'Title is required for duplicate check.' });
@@ -651,8 +651,9 @@ router.post('/check-duplicate', async (req: AuthenticatedRequest, res: Response)
   try {
     const supabase = getSupabaseClient(req.headers.authorization);
     
-    // 1. Generate text embedding synchronously using the title and content
-    const embedText = `Title: ${title.trim()}\nType: note\nContent: ${(content || '').trim()}`;
+    // 1. Generate text embedding synchronously using the title, type, and content
+    const cleanType = (type && ['note', 'bookmark', 'snippet', 'idea', 'resource'].includes(type)) ? type : 'note';
+    const embedText = `Title: ${title.trim()}\nType: ${cleanType}\nContent: ${(content || '').trim()}`;
     const queryEmbedding = await getEmbedding(embedText);
 
     // 2. Call pgvector similarity search RPC

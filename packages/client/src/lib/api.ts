@@ -231,12 +231,12 @@ export const api = {
   },
 
   // Duplicate Check API
-  checkDuplicate: async (title: string, content: string): Promise<Entry | null> => {
+  checkDuplicate: async (title: string, content: string, type: string): Promise<Entry | null> => {
     const headers = await getAuthHeaders();
     const res = await fetch(`${BASE_URL}/entries/check-duplicate`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ title, content })
+      body: JSON.stringify({ title, content, type })
     });
     if (!res.ok) {
       throw new Error(await res.text());

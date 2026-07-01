@@ -55,7 +55,7 @@
     input, select, textarea {
       width: 100%;
       background-color: #1e293b;
-      border: 1px border #334155;
+      border: 1px solid #334155;
       border-radius: 8px;
       padding: 8px 10px;
       font-size: 12px;
@@ -171,6 +171,20 @@
     <div class="form-group">
       <label for="content">Extracted Content / Notes</label>
       <textarea id="content" placeholder="Paste snippet or text description here..."></textarea>
+    </div>
+
+    <div class="form-group">
+      <label for="collection">Collection / Folder</label>
+      <select id="collection">
+        <option value="">(None - Inbox)</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Associated Tags</label>
+      <div id="tags-container" style="max-height: 80px; overflow-y: auto; border: 1px solid #334155; padding: 6px; border-radius: 8px; font-size: 11px; background-color: #1e293b;">
+        <div style="color: #94a3b8; font-style: italic; text-align: center; padding: 4px;">Loading tags...</div>
+      </div>
     </div>
 
     <div class="auth-toggle" id="auth-toggle">Configure Auth Token</div>

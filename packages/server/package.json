@@ -6,7 +6,9 @@
   "scripts": {
     "start": "bun run index.ts",
     "dev": "bun --watch run index.ts",
-    "reindex": "bun run src/scripts/reindex.ts"
+    "reindex": "bun run src/scripts/reindex.ts",
+    "test:duplicate": "bun run src/scripts/test-duplicate-check.ts",
+    "test:failover": "bun run src/scripts/test-failover.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

@@ -248,7 +248,7 @@ export default function EntryForm({
     if (!entry) {
       setCheckingDuplicate(true);
       try {
-        const duplicate = await api.checkDuplicate(title.trim(), content.trim());
+        const duplicate = await api.checkDuplicate(title.trim(), content.trim(), type);
         if (duplicate) {
           setDuplicateWarning(duplicate);
           setCheckingDuplicate(false);

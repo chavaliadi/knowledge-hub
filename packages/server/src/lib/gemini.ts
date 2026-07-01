@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { generateTextWithFailover } from './llm';
 
 // Load environment variables from the project root .env
 dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
@@ -63,7 +64,7 @@ export async function getEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Uses Gemini-1.5-flash with JSON mode to generate a one-sentence summary
+ * Uses Gemini-1.5-flash with fallback to Groq to generate a one-sentence summary
  * and auto-suggest tags for the provided entry details.
  */
 export async function getAISummaryAndTags(
@@ -72,12 +73,6 @@ export async function getAISummaryAndTags(
   content: string | null
 ): Promise<{ summary: string; tags: string[] }> {
   const t0 = Date.now();
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is missing from environment variables.');
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
   const prompt = `Analyze the following developer save entry and generate:
 1. A concise, one-sentence summary (max 15-20 words).
 2. Up to 3 relevant technical tags/concepts (lowercase, alphanumeric, e.g. "redis", "database", "react").
@@ -93,41 +88,9 @@ You MUST return a JSON object with EXACTLY this structure:
   "tags": ["tag1", "tag2", "tag3"]
 }`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini summary API failed with status ${response.status}: ${errorText}`);
-  }
-
-  const result = (await response.json()) as any;
-  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!rawText) {
-    throw new Error('No text returned from Gemini summary API.');
-  }
-
-  const parsed = JSON.parse(rawText.trim());
-  console.log(`Gemini API [getAISummaryAndTags]: ${Date.now() - t0}ms`);
+  const responseText = await generateTextWithFailover(prompt, undefined, true);
+  const parsed = JSON.parse(responseText.trim());
+  console.log(`LLM [getAISummaryAndTags]: ${Date.now() - t0}ms`);
   return {
     summary: parsed.summary || '',
     tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: string) => String(t).trim().toLowerCase()) : [],
@@ -152,12 +115,6 @@ export async function classifyEntryDomains(
   type: string
 ): Promise<string[]> {
   const t0 = Date.now();
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is missing from environment variables.');
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
   const prompt = `Analyze this developer knowledge base entry:
 Title: ${title}
 Type: ${type}
@@ -173,51 +130,18 @@ If nothing matches, return:
   "domains": []
 }`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini classification API failed with status ${response.status}: ${errorText}`);
-  }
-
-  const result = (await response.json()) as any;
-  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!rawText) {
-    console.log(`Gemini API [classifyEntryDomains]: ${Date.now() - t0}ms`);
-    return [];
-  }
-
   try {
-    const parsed = JSON.parse(rawText.trim());
+    const responseText = await generateTextWithFailover(prompt, undefined, true);
+    const parsed = JSON.parse(responseText.trim());
     if (Array.isArray(parsed.domains)) {
       const resDomains = parsed.domains.filter((d: string) => FIXED_DOMAINS.includes(d));
-      console.log(`Gemini API [classifyEntryDomains]: ${Date.now() - t0}ms`);
+      console.log(`LLM [classifyEntryDomains]: ${Date.now() - t0}ms`);
       return resDomains;
     }
   } catch (e) {
     console.error('Failed to parse domain classification response:', e);
   }
-  console.log(`Gemini API [classifyEntryDomains]: ${Date.now() - t0}ms`);
+  console.log(`LLM [classifyEntryDomains] (failed parse): ${Date.now() - t0}ms`);
   return [];
 }
 
@@ -229,12 +153,6 @@ export async function generateInsightAndNextTopics(
   totalEntries: number
 ): Promise<{ insight: string; topics: { name: string; rationale: string }[] }> {
   const t0 = Date.now();
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY is missing from environment variables.');
-  }
-
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
-
   const summaryData = Object.entries(domainCounts)
     .map(([domain, count]) => `- ${domain}: ${count} entries`)
     .join('\n');
@@ -255,41 +173,9 @@ You MUST respond with a JSON object matching this structure exactly:
   ]
 }`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: prompt,
-            },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini insight API failed with status ${response.status}: ${errorText}`);
-  }
-
-  const result = (await response.json()) as any;
-  const rawText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
-
-  if (!rawText) {
-    throw new Error('No text returned from Gemini insight API.');
-  }
-
-  const parsed = JSON.parse(rawText.trim());
-  console.log(`Gemini API [generateInsightAndNextTopics]: ${Date.now() - t0}ms`);
+  const responseText = await generateTextWithFailover(prompt, undefined, true);
+  const parsed = JSON.parse(responseText.trim());
+  console.log(`LLM [generateInsightAndNextTopics]: ${Date.now() - t0}ms`);
   return {
     insight: parsed.insight || '',
     topics: Array.isArray(parsed.topics) ? parsed.topics : []

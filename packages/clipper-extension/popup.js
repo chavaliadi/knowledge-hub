@@ -1,5 +1,6 @@
 // Configurable local server endpoint
-const API_URL = 'http://localhost:3000/entries';
+const BASE_URL = 'http://localhost:3000';
+const API_URL = `${BASE_URL}/entries`;
 
 document.addEventListener('DOMContentLoaded', async () => {
   const form = document.getElementById('clip-form');
@@ -12,6 +13,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusDiv = document.getElementById('status');
   const authToggle = document.getElementById('auth-toggle');
   const authSection = document.getElementById('auth-section');
+  
+  // New input elements
+  const collectionSelect = document.getElementById('collection');
+  const tagsContainer = document.getElementById('tags-container');
 
   let activeToken = '';
 
@@ -58,18 +63,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     activeToken = discoveredToken;
     tokenInput.value = discoveredToken;
     showStatus('Connected & authenticated via active tab session!', 'success');
+    loadCollectionsAndTags(activeToken);
   } else {
     // Check extension local storage fallback
     chrome.storage.local.get(['jwt_token'], (res) => {
       if (res.jwt_token) {
         activeToken = res.jwt_token;
         tokenInput.value = res.jwt_token;
+        loadCollectionsAndTags(activeToken);
       } else {
         showStatus('No active authentication found. Please open KnowledgeHub or paste token.', 'error');
         authSection.style.display = 'block';
       }
     });
   }
+
+  // Reload metadata if token is pasted and changed
+  tokenInput.addEventListener('change', () => {
+    const val = tokenInput.value.trim();
+    if (val) {
+      activeToken = val;
+      loadCollectionsAndTags(val);
+    }
+  });
 
   // Toggle auth panel
   authToggle.addEventListener('click', () => {
@@ -96,13 +112,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     saveBtn.textContent = 'Saving entry...';
 
     try {
+      // Get selected collection
+      const collection_id = collectionSelect.value || null;
+
+      // Get checked tags
+      const checkedCheckboxes = tagsContainer.querySelectorAll('input[name="clipper-tags"]:checked');
+      const tag_ids = Array.from(checkedCheckboxes).map(cb => cb.value);
+
       const payload = {
         title: titleInput.value.trim(),
         url: urlInput.value.trim(),
         type: typeSelect.value,
         content: contentInput.value.trim(),
-        tag_ids: [],
-        collection_id: null,
+        tag_ids: tag_ids,
+        collection_id: collection_id,
         is_pinned: false,
       };
 
@@ -137,6 +160,71 @@ document.addEventListener('DOMContentLoaded', async () => {
     statusDiv.textContent = msg;
     statusDiv.className = type === 'success' ? 'status-success' : 'status-error';
     statusDiv.style.display = 'block';
+  }
+
+  async function loadCollectionsAndTags(token) {
+    if (!token) return;
+
+    // Fetch collections
+    try {
+      const colResponse = await fetch(`${BASE_URL}/collections`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (colResponse.ok) {
+        const collections = await colResponse.json();
+        // Clear previous except first placeholder option
+        collectionSelect.innerHTML = '<option value="">(None - Inbox)</option>';
+        collections.forEach(col => {
+          const opt = document.createElement('option');
+          opt.value = col.id;
+          opt.textContent = col.name;
+          collectionSelect.appendChild(opt);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to load collections in clipper:', err);
+    }
+
+    // Fetch tags
+    try {
+      const tagsResponse = await fetch(`${BASE_URL}/tags`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (tagsResponse.ok) {
+        const tags = await tagsResponse.json();
+        tagsContainer.innerHTML = '';
+        if (tags.length === 0) {
+          tagsContainer.innerHTML = '<div style="color: #94a3b8; font-style: italic; text-align: center; padding: 4px;">No tags created yet</div>';
+        } else {
+          tags.forEach(tag => {
+            const label = document.createElement('label');
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '6px';
+            label.style.fontSize = '11px';
+            label.style.fontWeight = '500';
+            label.style.textTransform = 'none';
+            label.style.color = '#f8fafc';
+            label.style.marginBottom = '4px';
+            label.style.cursor = 'pointer';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = tag.id;
+            checkbox.style.width = 'auto';
+            checkbox.style.cursor = 'pointer';
+            checkbox.name = 'clipper-tags';
+
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(tag.name));
+            tagsContainer.appendChild(label);
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load tags in clipper:', err);
+      tagsContainer.innerHTML = '<div style="color: #f87171; text-align: center; padding: 4px;">Error loading tags</div>';
+    }
   }
 
   async function findLocalAuthToken() {
