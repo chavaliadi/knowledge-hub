@@ -181,7 +181,7 @@ Instructions:
 4. Keep the answer clear, structured, and developer-focused. Include markdown code blocks if the sources contain relevant snippets.`;
 
     // 5. Call Gemini stream API with fallback to Groq
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
     
     const requestBody = {
       contents: [

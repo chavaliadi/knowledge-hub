@@ -34,11 +34,11 @@ export async function generateTextWithFailover(
   systemInstruction?: string,
   responseJson: boolean = false
 ): Promise<string> {
-  // 1. Attempt Gemini-1.5-Flash
+  // 1. Attempt Gemini-2.5-Flash
   if (GEMINI_API_KEY) {
     try {
-      console.log('LLM Service: Attempting generation with Google Gemini (gemini-1.5-flash)...');
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      console.log('LLM Service: Attempting generation with Google Gemini (gemini-2.5-flash)...');
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
       const body: any = {
         contents: [{ parts: [{ text: prompt }] }]
