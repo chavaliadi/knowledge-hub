@@ -128,7 +128,7 @@ async function testFailoverOn429() {
   const originalFetch = globalThis.fetch;
   let geminiIntercepted = false;
   
-  globalThis.fetch = async (url, options) => {
+  globalThis.fetch = (async (url: any, options: any) => {
     const urlString = typeof url === 'string' ? url : (url as any).url || '';
     if (urlString.includes('generativelanguage.googleapis.com')) {
       console.log('  [Mocked Fetch] Intercepting Gemini request and returning HTTP 429 (Rate Limit)...');
@@ -146,7 +146,7 @@ async function testFailoverOn429() {
     }
     // Let all other requests (such as Groq) pass through using original fetch
     return originalFetch(url, options);
-  };
+  }) as any;
 
   let test4Passed = false;
   try {

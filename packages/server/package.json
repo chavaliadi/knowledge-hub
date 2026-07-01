@@ -8,7 +8,8 @@
     "dev": "bun --watch run index.ts",
     "reindex": "bun run src/scripts/reindex.ts",
     "test:duplicate": "bun run src/scripts/test-duplicate-check.ts",
-    "test:failover": "bun run src/scripts/test-failover.ts"
+    "test:failover": "bun run src/scripts/test-failover.ts",
+    "test:reindex": "bun run src/scripts/test-reindex-e2e.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
