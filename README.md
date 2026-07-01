@@ -8,14 +8,15 @@ KnowledgeHub is a premium, developer-focused, AI-powered personal knowledge base
 
 * **Multi-type Categorization**: Separate your entries into `notes`, `bookmarks`, `snippets`, `ideas`, and `resources` for customized styling and metadata.
 * **Intelligent File Attachments**:
-  * **Image OCR / Diagram Transcription**: Google's Gemini-1.5-Flash API performs OCR on screenshots or diagrams (like database schemas or system architecture charts) and appends the description directly to the search vector.
+  * **Image OCR / Diagram Transcription**: Google's Gemini-2.5-Flash API performs OCR on screenshots or diagrams (like database schemas or system architecture charts) and appends the description directly to the search vector.
   * **Local PDF Text Extraction**: Reads contents of uploaded PDFs locally via `pdf-parse` to maintain privacy and offline indexability.
   * **Interactive Document Views**: Built-in full-screen image lightboxes and embedded inline frame PDF reader pages.
 * **AI-Powered Concept Search**: Sparkles-toggle search modes utilize vector embeddings (`gemini-embedding-001`) and pgvector distance matches to calculate query similarity confidence (rendered as a `94% Match` badge).
-* **SSE Conversational RAG Chat**: Chat with your files! Retrieves relevant documents, reranks matches, feeds clean system prompts to Gemini-1.5-Flash, and streams Markdown-compatible answers using Server-Sent Events (SSE) complete with active citation links.
-* **Browser Clipper Extension**: Save active tab titles, URLs, selected page text, or custom notes in one click. Discovers active local client JSON Web Tokens (JWT) for instant single sign-on (SSO) integration.
+* **SSE Conversational RAG Chat & Fallover**: Chat with your files! Retrieves relevant documents, reranks matches, feeds clean system prompts to Gemini-2.5-Flash, and streams Markdown-compatible answers using Server-Sent Events (SSE). If Gemini fails or hits rate limits, it transparently triggers a failover stream via Groq.
+* **Resilient Multi-Provider LLM Layer**: Text generation tasks automatically fall back from Gemini-2.5-Flash to Groq (`llama-3.3-70b-versatile`) on transient rate limits (429) or server errors (5xx). Client/config errors (400/403) are thrown directly. Spatial vector calculations remain locked to `gemini-embedding-001` to prevent database index poisoning.
+* **Browser Clipper Extension with Tag & Collection support**: Save active tab titles, URLs, selected page text, or custom notes in one click. Discovers active local client JSON Web Tokens (JWT) for instant single sign-on (SSO), loads tags/collections dynamically from the backend, and saves folders and labels at capturing time.
 * **Related Entry Discovery (V2)**: Automatically finds and displays similar entries in the detail pane based on vector cosine similarity (using a tuned threshold of `0.75`).
-* **Submit-Time Duplicate Warning (V2)**: Runs a synchronous duplicate check during form submission and presents a modal warning if content matches existing saves above `0.92` similarity.
+* **Submit-Time Duplicate Warning (V2)**: Runs a synchronous duplicate check during form submission using the specific card type (note, bookmark, snippet) and presents a modal warning if content matches existing saves above `0.92` similarity.
 * **AI Intelligence Dashboard (V2)**: Auto-classifies saves into 6 domains, calculates a weighted overall "Knowledge Health Score" (balancing domain coverage, entry character lengths, tag density, and update recency), and displays Gemini-generated next-step study suggestions with expandable rationale lists.
 * **Inline AI Explainer (V2)**: Pre-populates and fires the RAG chat assistant with context-specific prompts directly from the active entry detail panel.
 * **Metadata Markdown Export (V2)**: Instantly compiles entry details, collections, tags list, summaries, and file indexes to Markdown (`.md`) format downloads.
@@ -29,7 +30,7 @@ Why is KnowledgeHub built with this specific stack?
 1. **Bun Runtime**: Bun replaces Node.js to offer significantly faster startup times, native TypeScript compilation out of the box, and a highly optimized package manager. This guarantees rapid API responses and ultra-fast hot reloading.
 2. **Supabase & PostgreSQL**: Provides a enterprise-grade relational database coupled with Row-Level Security (RLS) policies. Using Supabase's native Go/JS client handles authentication flows and bucket storage securely, removing the need for a separate IAM service.
 3. **pgvector extension**: Enables high-dimensional vector search natively inside PostgreSQL. We calculate similarity scores using standard SQL queries, avoiding the maintenance overhead, latency, and synchronization issues of external vector databases.
-4. **Google Gemini-1.5-Flash**: Chosen for its large 1-million token context window, fast processing speeds, and state-of-the-art multi-modal capabilities. It handles complex PDF analysis, OCR diagram transcriptions, and SSE streaming chat with minimal latency.
+4. **Google Gemini-2.5-Flash & Groq Llama 3.3 Failover**: Primary generation runs on Gemini 2.5 Flash for high context capability and markdown structure. If Gemini errors out or hits limits, text tasks transparently failover to Groq (`llama-3.3-70b-versatile`) to maximize backend availability.
 5. **React, Tailwind CSS & Glassmorphism styling**: Tailored for developer ergonomics. Features custom animations, smooth transitions, card elevation, and glowing dark-mode indicators representing search similarity.
 
 ---
@@ -430,8 +431,10 @@ Create a `.env` file in the **root directory**:
 # Backend Keys
 SUPABASE_URL=https://your-supabase-project.supabase.co
 SUPABASE_ANON_KEY=your-supabase-public-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key  # Required for admin/reindexer scripts to bypass RLS. Throws loudly if missing.
 PORT=3000
 GEMINI_API_KEY=your-google-gemini-developer-api-key
+GROQ_API_KEY=your-groq-api-key                            # Fallback provider key
 
 # Frontend Client Keys
 VITE_SUPABASE_URL=https://your-supabase-project.supabase.co
@@ -456,9 +459,25 @@ To backfill and generate missing AI summaries, auto-tags, vector embeddings, or 
 bun run --cwd packages/server reindex
 ```
 
+### Running Test Verification Scripts
+A suite of validation scripts is available to test core features and regressions:
+
+* **Duplicate Check Test**: Validates vector distance scoring logic and thresholds for entries and code snippets.
+  ```bash
+  bun run --cwd packages/server test:duplicate
+  ```
+* **LLM Failover Test**: Simulates Gemini rate limits (intercepting network calls with HTTP 429) to verify transparent fallback to Groq completions and ensures client config errors (400/403) are thrown rather than swallowed.
+  ```bash
+  bun run --cwd packages/server test:failover
+  ```
+* **Reindexer E2E Verification**: Inserts a raw note, triggers reindexing, asserts successful vector and AI metadata updates, and cleans up.
+  ```bash
+  bun run --cwd packages/server test:reindex
+  ```
+
 ### Deploying the Chrome Extension
 1. Open Google Chrome and go to `chrome://extensions/`.
 2. Enable **Developer mode** (top-right toggle).
 3. Click **Load unpacked** (top-left).
 4. Select the folder `/packages/clipper-extension`.
-5. Open your local frontend client (`http://localhost:5173`) and sign in; the extension will automatically connect to your session token for Single Sign-On (SSO).
+5. Open your local frontend client (`http://localhost:5173`) and sign in; the extension will automatically connect to your session token for Single Sign-On (SSO) and fetch tags/collections.
