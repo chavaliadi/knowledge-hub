@@ -59,7 +59,7 @@ export async function extractTextFromAttachment(
       }
 
       const base64Data = buffer.toString('base64');
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
       const prompt = `Analyze this image uploaded to a developer knowledge base. Extract all text/code from it. If the image is a diagram, chart, or system architecture schematic, provide a detailed description of the components and relationship flow as well. Output only the extracted text and diagram descriptions, with no conversational introduction or filler.`;
 

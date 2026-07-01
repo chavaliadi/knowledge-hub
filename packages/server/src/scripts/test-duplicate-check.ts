@@ -20,6 +20,11 @@ function cosineSimilarity(a: number[], b: number[]): number {
 async function runRegressionTest() {
   console.log('=== Duplicate Check Regression Test ===\n');
 
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn('\n❌ [SKIP] GEMINI_API_KEY is not set. Skipping duplicate check test.\n');
+    process.exit(process.env.CI ? 0 : 1);
+  }
+
   try {
     const testTitle = 'Kubernetes ingress controller configuration setup';
     const testContent = 'apiVersion: networking.k8s.io/v1\nkind: Ingress\nmetadata:\n  name: minimal-ingress';

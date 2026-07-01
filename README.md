@@ -121,7 +121,7 @@ sequenceDiagram
     else File is Image
         Server->>Storage: Download Image Buffer
         Storage-->>Server: Return Binary Buffer
-        Server->>Gemini: OCR & Diagram Transcription Request (Gemini-1.5-Flash)
+        Server->>Gemini: OCR & Diagram Transcription Request (Gemini-2.5-Flash)
         Gemini-->>Server: Return Transcribed Text / Schema Flows
     end
 
@@ -378,6 +378,7 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │       ├── lib
 │   │       │   ├── attachments.ts         # OCR transcription and PDF extract helpers
 │   │       │   ├── gemini.ts              # Gemini API embeddings / summary / domains / insights
+│   │       │   ├── llm.ts                 # Unified multi-provider LLM failover engine (V2)
 │   │       │   └── supabase.ts            # Supabase Admin client
 │   │       ├── middleware
 │   │       │   └── auth.ts                # Token checking and User extraction
@@ -389,7 +390,10 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │       │   ├── search.ts              # Semantic or string query routes
 │   │       │   └── tags.ts                # Tag routing
 │   │       └── scripts
-│   │           └── reindex.ts             # Batched metadata generator recovery script
+│   │           ├── reindex.ts             # Batched metadata generator recovery script
+│   │           ├── test-duplicate-check.ts # Duplicate warning math regression check (V2)
+│   │           ├── test-failover.ts       # Rate limit (429) simulated interception test (V2)
+│   │           └── test-reindex-e2e.ts    # Positive reindexing path E2E database verification (V2)
 │   └── clipper-extension                  # Chrome Browser Extension Clipper
 │       ├── manifest.json                  # Manifest configuration (Manifest V3)
 │       ├── popup.html                     # Extension clipper window layout
