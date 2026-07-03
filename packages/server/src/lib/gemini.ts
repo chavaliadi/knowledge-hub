@@ -182,3 +182,59 @@ You MUST respond with a JSON object matching this structure exactly:
   };
 }
 
+/**
+ * Parses a new entry's content and extracts semantic links/edges to other existing entries.
+ */
+export async function extractSemanticLinks(
+  title: string,
+  content: string | null,
+  otherEntries: { id: string; title: string }[]
+): Promise<{ targetId: string; type: string }[]> {
+  const t0 = Date.now();
+  if (otherEntries.length === 0) return [];
+
+  // Limit other entries context size to avoid token limit boundaries
+  const candidatesStr = otherEntries
+    .slice(0, 100) // inspect top 100 most recent entries for relationship linking
+    .map(e => `ID: ${e.id} | Title: ${e.title}`)
+    .join('\n');
+
+  const prompt = `Analyze this developer knowledge base entry:
+Title: ${title}
+Content: ${content || 'No content'}
+
+We have a list of other saved entry titles:
+${candidatesStr}
+
+Does the active entry have a conceptual connection, dependency, implementation detail, or alternative relationship to any of the other saved entries?
+If yes, return a JSON object with a "links" key containing an array of matched links. E.g.
+{
+  "links": [
+    { "targetId": "uuid-here", "type": "depends_on" }
+  ]
+}
+Allowed relationship types: "depends_on", "implements", "relates_to", "alternative_to".
+Only return links that have strong relevance. If no links are relevant, return:
+{
+  "links": []
+}`;
+
+  try {
+    const responseText = await generateTextWithFailover(prompt, undefined, true);
+    const parsed = JSON.parse(responseText.trim());
+    if (Array.isArray(parsed.links)) {
+      const validLinks = parsed.links.filter((link: any) => 
+        otherEntries.some(e => e.id === link.targetId) &&
+        ['depends_on', 'implements', 'relates_to', 'alternative_to'].includes(link.type)
+      );
+      console.log(`LLM [extractSemanticLinks]: ${Date.now() - t0}ms`);
+      return validLinks;
+    }
+  } catch (e) {
+    console.error('Failed to parse semantic links:', e);
+  }
+  console.log(`LLM [extractSemanticLinks] (failed parse): ${Date.now() - t0}ms`);
+  return [];
+}
+
+

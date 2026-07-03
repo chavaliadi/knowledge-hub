@@ -3,6 +3,7 @@ import { getSupabaseClient } from '../lib/supabase';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import type { Response } from 'express';
 import { getEmbedding } from '../lib/gemini';
+import { computeRerankScores } from '../lib/reranker';
 
 const router = Router();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -99,71 +100,132 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       return;
     }
 
-    // 2. Query Supabase RPC for top 8 items matching cosine similarity
-    const { data: matchedRows, error: rpcError } = await supabase.rpc('match_entries', {
+    // 2. Query Supabase match_chunks RPC for top 30 chunks matching similarity
+    const { data: matchedChunks, error: rpcError } = await supabase.rpc('match_chunks', {
       query_embedding: queryEmbedding,
-      match_threshold: 0.1, // low threshold to capture potential matches
-      match_count: 8,
+      match_threshold: 0.01, // low threshold to capture broad matches
+      match_count: 30,
     });
 
     if (rpcError) {
-      console.error('RPC match_entries failed for chat:', rpcError.message);
+      console.error('RPC match_chunks failed for chat:', rpcError.message);
       res.write(`data: ${JSON.stringify({ error: `Similarity database search failed: ${rpcError.message}` })}\n\n`);
       res.end();
       return;
     }
 
-    let topCandidates: any[] = [];
-    if (matchedRows && matchedRows.length > 0) {
-      const matchedIds = matchedRows.map((r: any) => r.id);
+    // 2.5. Retrieve keyword text chunks as well (Hybrid Pool)
+    let keywordChunks: any[] = [];
+    try {
+      const searchStr = `%${message.trim()}%`;
+      const { data: kwData, error: keywordErr } = await supabase
+        .from('entry_chunks')
+        .select('id, entry_id, user_id, chunk_index, content')
+        .eq('user_id', req.user!.id)
+        .ilike('content', searchStr)
+        .limit(15);
+      
+      if (!keywordErr && kwData) {
+        keywordChunks = kwData;
+      }
+    } catch (kwErr) {
+      console.error('Keyword pool retrieval failed for chat:', kwErr);
+    }
 
-      // Fetch tags/relationships for these entries
-      const { data: fullEntries, error: fetchError } = await supabase
+    // Deduplicate pool
+    const uniqueChunksMap = new Map<string, any>();
+    (matchedChunks || []).forEach((c: any) => uniqueChunksMap.set(c.id, c));
+    keywordChunks.forEach((c: any) => {
+      if (!uniqueChunksMap.has(c.id)) {
+        uniqueChunksMap.set(c.id, {
+          id: c.id,
+          entry_id: c.entry_id,
+          user_id: c.user_id,
+          chunk_index: c.chunk_index,
+          content: c.content,
+          similarity: 0
+        });
+      }
+    });
+
+    const pool = Array.from(uniqueChunksMap.values());
+
+    let topCandidates: any[] = [];
+    const uniqueParentEntries: any[] = [];
+
+    if (pool.length > 0) {
+      // 3. Rerank the pool using Cross-Encoder
+      const docTexts = pool.map(c => c.content);
+      const scores = await computeRerankScores(message, docTexts);
+
+      const scoredChunks = pool.map((c, idx) => ({
+        ...c,
+        rerankScore: scores[idx] ?? 0
+      }));
+
+      // Sort descending by rerankScore
+      scoredChunks.sort((a, b) => b.rerankScore - a.rerankScore);
+      const selectedChunks = scoredChunks.slice(0, 5); // Take top 5
+
+      // Fetch parent entries for selected chunks
+      const parentEntryIds = Array.from(new Set(selectedChunks.map(c => c.entry_id)));
+      const { data: parentEntries, error: fetchError } = await supabase
         .from('entries')
-        .select('*, entry_tags(tag:tags(id, name)), collections(name)')
-        .in('id', matchedIds);
+        .select('id, title, type, url')
+        .in('id', parentEntryIds);
 
       if (fetchError) {
-        console.error('Failed to populate chat entries:', fetchError.message);
+        console.error('Failed to populate parent entries for chat:', fetchError.message);
         res.write(`data: ${JSON.stringify({ error: 'Failed to retrieve populated matches from database.' })}\n\n`);
         res.end();
         return;
       }
 
-      // Map populated details back to matched similarity scores
-      const populated = (fullEntries || []).map((entry: any) => {
-        const similarity = matchedRows.find((r: any) => r.id === entry.id)?.similarity || 0;
-        const tags = entry.entry_tags 
-          ? entry.entry_tags.map((et: any) => et.tag).filter(Boolean)
-          : [];
-        const collection_name = entry.collections ? entry.collections.name : null;
-        
-        const formatted = { ...entry, tags, collection_name };
-        delete formatted.entry_tags;
-        delete formatted.collections;
-        return { ...formatted, similarity };
+      // Format candidates
+      const mappedCandidates = selectedChunks.map((chunk) => {
+        const parent = (parentEntries || []).find((p: any) => p.id === chunk.entry_id);
+        return {
+          chunk_id: chunk.id,
+          entry_id: chunk.entry_id,
+          content: chunk.content,
+          title: parent?.title || 'Untitled Note',
+          type: parent?.type || 'note',
+          url: parent?.url || null
+        };
       });
 
-      // 3. Rerank the top 8 down to 3-5 candidates
-      const reranked = rerankCandidates(populated, message);
-      topCandidates = reranked.slice(0, 4); // Take top 4 reranked documents
+      // Deduplicate parent entries for UI citations list
+      const uniqueEntriesMap = new Map<string, any>();
+      mappedCandidates.forEach((c) => {
+        if (!uniqueEntriesMap.has(c.entry_id)) {
+          uniqueEntriesMap.set(c.entry_id, {
+            id: c.entry_id,
+            title: c.title,
+            type: c.type,
+            url: c.url
+          });
+        }
+      });
+      uniqueParentEntries.push(...Array.from(uniqueEntriesMap.values()));
+      topCandidates = mappedCandidates;
     }
 
     // Send citations structure to client first
-    const citations = topCandidates.map((c, i) => ({
-      index: i + 1,
-      id: c.id,
-      title: c.title,
-      type: c.type,
-      url: c.url
+    const citations = uniqueParentEntries.map((entry, idx) => ({
+      index: idx + 1,
+      id: entry.id,
+      title: entry.title,
+      type: entry.type,
+      url: entry.url
     }));
     res.write(`data: ${JSON.stringify({ citations })}\n\n`);
 
-    // 4. Construct RAG context prompt
+    // 4. Construct RAG context prompt using chunk level sources
     let formattedContext = '';
     if (topCandidates.length > 0) {
-      formattedContext = topCandidates.map((entry, index) => {
-        return `[Source #${index + 1}]\nTitle: ${entry.title}\nType: ${entry.type}\nContent: ${entry.content || 'No text content'}\n${entry.url ? `URL: ${entry.url}` : ''}`;
+      formattedContext = topCandidates.map((cand) => {
+        const citationIndex = uniqueParentEntries.findIndex(e => e.id === cand.entry_id) + 1;
+        return `[Source #${citationIndex}]\nTitle: ${cand.title}\nType: ${cand.type}\nContent: ${cand.content}\n${cand.url ? `URL: ${cand.url}` : ''}`;
       }).join('\n\n');
     } else {
       formattedContext = 'No relevant notes or bookmarks were found in the database matching this query.';

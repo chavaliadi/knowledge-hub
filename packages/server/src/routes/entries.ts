@@ -5,6 +5,7 @@ import type { Response } from 'express';
 import { getEmbedding, getAISummaryAndTags, classifyEntryDomains } from '../lib/gemini';
 import { extractTextFromAttachment } from '../lib/attachments';
 import { rebuildEntryChunks } from '../lib/chunks';
+import { rebuildEntrySemanticLinks } from '../lib/graph';
 
 const getEntryEmbedText = (title: string, type: string, content: string | null) => {
   return `Title: ${title}\nType: ${type}\nContent: ${content || ''}`;
@@ -276,6 +277,19 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       console.error(`Failed to build chunks for entry ${newEntry.id}:`, chunkErr.message);
     }
 
+    // 3.6. Rebuild semantic concept connections
+    try {
+      await rebuildEntrySemanticLinks(
+        supabase,
+        newEntry.id,
+        userId,
+        title,
+        content || null
+      );
+    } catch (linkErr: any) {
+      console.error(`Failed to build concept links for entry ${newEntry.id}:`, linkErr.message);
+    }
+
     // 4. Fetch complete populated entry
     const { data: fullEntry, error: fetchError } = await supabase
       .from('entries')
@@ -528,6 +542,18 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         );
       } catch (chunkErr: any) {
         console.error(`Failed to rebuild chunks on update for entry ${id}:`, chunkErr.message);
+      }
+
+      try {
+        await rebuildEntrySemanticLinks(
+          supabase,
+          id,
+          userId,
+          finalTitle,
+          finalContent
+        );
+      } catch (linkErr: any) {
+        console.error(`Failed to rebuild concept links on update for entry ${id}:`, linkErr.message);
       }
     }
 
