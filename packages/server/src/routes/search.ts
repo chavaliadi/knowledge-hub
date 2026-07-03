@@ -27,7 +27,7 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
   const { q, type, tagId, collectionId, ai } = req.query;
 
   try {
-    // 1. AI Semantic Search path
+    // 1. AI Semantic Search path (Now Hybrid Search with RRF)
     if (ai === 'true' && q && typeof q === 'string' && q.trim()) {
       const t0 = Date.now();
       let queryEmbedding: number[];
@@ -38,21 +38,103 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         return;
       }
 
-      // Invoke RPC similarity search
-      const { data: matchedRows, error: rpcError } = await supabase.rpc('match_entries', {
-        query_embedding: queryEmbedding,
-        match_threshold: 0.1, // lower threshold to match more concepts
-        match_count: 40,
-        filter_type: (type && typeof type === 'string' && type.trim()) ? type.trim() : null,
-        filter_collection_id: (collectionId && typeof collectionId === 'string' && collectionId.trim()) ? collectionId.trim() : null
-      });
+      // Fetch entries matching primary filters (type, collection) to restrict search scope
+      let filterQuery = supabase
+        .from('entries')
+        .select('id')
+        .eq('user_id', userId);
 
-      if (rpcError) {
-        res.status(500).json({ error: `RPC similarity search failed: ${rpcError.message}` });
+      if (type && typeof type === 'string' && type.trim()) {
+        filterQuery = filterQuery.eq('type', type.trim());
+      }
+      if (collectionId && typeof collectionId === 'string' && collectionId.trim()) {
+        filterQuery = filterQuery.eq('collection_id', collectionId.trim());
+      }
+
+      const { data: filteredRows, error: filterErr } = await filterQuery;
+      if (filterErr) {
+        res.status(500).json({ error: `Filter search failed: ${filterErr.message}` });
+        return;
+      }
+      const allowedEntryIds = new Set((filteredRows || []).map((r: any) => r.id));
+
+      if (allowedEntryIds.size === 0) {
+        res.json([]);
         return;
       }
 
-      let matchedIds = matchedRows ? matchedRows.map((r: any) => r.id) : [];
+      // Step A: Vector search across chunks
+      const { data: matchedChunks, error: rpcError } = await supabase.rpc('match_chunks', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.01, // low threshold to capture broad matches
+        match_count: 100
+      });
+
+      if (rpcError) {
+        res.status(500).json({ error: `Chunk similarity search failed: ${rpcError.message}` });
+        return;
+      }
+
+      const vectorEntriesMap = new Map<string, number>();
+      (matchedChunks || []).forEach((chunk: any) => {
+        if (allowedEntryIds.has(chunk.entry_id)) {
+          const score = chunk.similarity || 0;
+          const existing = vectorEntriesMap.get(chunk.entry_id);
+          if (existing === undefined || score > existing) {
+            vectorEntriesMap.set(chunk.entry_id, score);
+          }
+        }
+      });
+
+      const vectorRankedList = Array.from(vectorEntriesMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(entry => entry[0]);
+
+      // Step B: Keyword search (ILIKE pattern matching)
+      const searchStr = `%${q.trim()}%`;
+      const { data: keywordRows, error: keywordErr } = await supabase
+        .from('entries')
+        .select('id, title, content')
+        .eq('user_id', userId)
+        .or(`title.ilike.${searchStr},content.ilike.${searchStr},url.ilike.${searchStr}`);
+
+      if (keywordErr) {
+        res.status(500).json({ error: `Keyword search failed: ${keywordErr.message}` });
+        return;
+      }
+
+      const keywordRankedList = (keywordRows || [])
+        .filter((entry: any) => allowedEntryIds.has(entry.id))
+        .map((entry: any) => {
+          let score = 0;
+          const titleLower = (entry.title || '').toLowerCase();
+          const contentLower = (entry.content || '').toLowerCase();
+          const qLower = q.toLowerCase();
+          if (titleLower.includes(qLower)) score += 10;
+          if (contentLower.includes(qLower)) score += 2;
+          return { id: entry.id, score };
+        })
+        .sort((a, b) => b.score - a.score)
+        .map(item => item.id);
+
+      // Step C: Reciprocal Rank Fusion (RRF)
+      const k = 60;
+      const rrfScores = new Map<string, number>();
+
+      vectorRankedList.forEach((id, index) => {
+        const rank = index + 1;
+        const rrfContribution = 1 / (k + rank);
+        rrfScores.set(id, rrfContribution);
+      });
+
+      keywordRankedList.forEach((id, index) => {
+        const rank = index + 1;
+        const rrfContribution = 1 / (k + rank);
+        rrfScores.set(id, (rrfScores.get(id) || 0) + rrfContribution);
+      });
+
+      let finalEntryIds = Array.from(rrfScores.keys())
+        .sort((a, b) => (rrfScores.get(b) || 0) - (rrfScores.get(a) || 0));
 
       // Filter by tagId if provided
       if (tagId && typeof tagId === 'string' && tagId.trim()) {
@@ -67,10 +149,13 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
         }
 
         const taggedIds = new Set(etData ? etData.map((et: any) => et.entry_id) : []);
-        matchedIds = matchedIds.filter((id: string) => taggedIds.has(id));
+        finalEntryIds = finalEntryIds.filter((id: string) => taggedIds.has(id));
       }
 
-      if (matchedIds.length === 0) {
+      // Limit results
+      const limitIds = finalEntryIds.slice(0, 40);
+
+      if (limitIds.length === 0) {
         res.json([]);
         return;
       }
@@ -79,33 +164,29 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       const { data: fullEntries, error: fetchError } = await supabase
         .from('entries')
         .select('*, entry_tags(tag:tags(id, name)), collections(name), attachments(*)')
-        .in('id', matchedIds);
+        .in('id', limitIds);
 
       if (fetchError) {
         res.status(500).json({ error: fetchError.message });
         return;
       }
 
-      const similarityMap = new Map<string, number>(
-        matchedRows.map((r: any) => [r.id, r.similarity] as [string, number])
-      );
-
       const formattedResults = (fullEntries || [])
         .map((entry: any) => {
           const formatted = formatEntry(entry);
           return {
             ...formatted,
-            similarity: similarityMap.get(entry.id)
+            similarity: vectorEntriesMap.get(entry.id) || 0 // pass maximum chunk vector similarity back
           };
         })
         .sort((a: any, b: any) => {
-          // Pinned entries take priority, then ordered by descending similarity score
+          // Pinned entries take priority, then ordered by RRF sorting
           if (a.is_pinned && !b.is_pinned) return -1;
           if (!a.is_pinned && b.is_pinned) return 1;
-          return (similarityMap.get(b.id) || 0) - (similarityMap.get(a.id) || 0);
+          return limitIds.indexOf(a.id) - limitIds.indexOf(b.id);
         });
 
-      console.log(`AI Search path execution: ${Date.now() - t0}ms`);
+      console.log(`Hybrid Search execution: ${Date.now() - t0}ms`);
       res.json(formattedResults);
       return;
     }

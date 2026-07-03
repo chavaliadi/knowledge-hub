@@ -420,6 +420,7 @@ Set up a PostgreSQL database in Supabase and run the migration scripts in the SQ
 4. Run [schema_v4.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v4.sql) (pgvector functions).
 5. Run [schema_v5.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v5.sql) (Summary & AI Auto-tag tables).
 6. Run [schema_v6.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v6.sql) (Domains classifications & Cached analytics report table).
+7. Run [schema_v7.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v7.sql) (Chunk-level indexing & match_chunks function).
 
 *Note: Create a storage bucket inside your Supabase Storage dashboard named `Knowledge-Hub`.*
 

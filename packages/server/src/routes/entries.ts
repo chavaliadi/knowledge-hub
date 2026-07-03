@@ -4,6 +4,7 @@ import type { AuthenticatedRequest } from '../middleware/auth';
 import type { Response } from 'express';
 import { getEmbedding, getAISummaryAndTags, classifyEntryDomains } from '../lib/gemini';
 import { extractTextFromAttachment } from '../lib/attachments';
+import { rebuildEntryChunks } from '../lib/chunks';
 
 const getEntryEmbedText = (title: string, type: string, content: string | null) => {
   return `Title: ${title}\nType: ${type}\nContent: ${content || ''}`;
@@ -259,6 +260,21 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
         return;
       }
     }
+    
+    // 3.5. Rebuild chunk-level embeddings
+    try {
+      await rebuildEntryChunks(
+        supabase,
+        newEntry.id,
+        userId,
+        title,
+        type,
+        content || null,
+        attachmentsText
+      );
+    } catch (chunkErr: any) {
+      console.error(`Failed to build chunks for entry ${newEntry.id}:`, chunkErr.message);
+    }
 
     // 4. Fetch complete populated entry
     const { data: fullEntry, error: fetchError } = await supabase
@@ -291,6 +307,12 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     let aiSummary: string | undefined = undefined;
     let aiTags: string[] | undefined = undefined;
     let entryDomains: string[] | undefined = undefined;
+
+    let shouldRebuildChunks = false;
+    let finalTitle = '';
+    let finalType = '';
+    let finalContent: string | null = null;
+    let finalAttachmentsText = '';
     
     if (title !== undefined || type !== undefined || content !== undefined || attachments !== undefined) {
       const { data: existingEntry, error: fetchErr } = await supabase
@@ -301,9 +323,9 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         .maybeSingle();
 
       if (existingEntry) {
-        const finalTitle = title !== undefined ? title : existingEntry.title;
-        const finalType = type !== undefined ? type : existingEntry.type;
-        const finalContent = content !== undefined ? content : existingEntry.content;
+        const computedTitle = title !== undefined ? title : existingEntry.title;
+        const computedType = type !== undefined ? type : existingEntry.type;
+        const computedContent = content !== undefined ? content : existingEntry.content;
         
         // Final attachments to be embedded
         const finalAttachments = attachments !== undefined ? attachments : (existingEntry.attachments || []);
@@ -322,8 +344,14 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           }
         }
 
+        shouldRebuildChunks = true;
+        finalTitle = computedTitle;
+        finalType = computedType;
+        finalContent = computedContent || null;
+        finalAttachmentsText = attachmentsText;
+
         try {
-          let embedText = getEntryEmbedText(finalTitle, finalType, finalContent);
+          let embedText = getEntryEmbedText(computedTitle, computedType, computedContent);
           if (attachmentsText) {
             embedText += `\n\nAttachments Content:\n${attachmentsText}`;
           }
@@ -333,11 +361,11 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         }
 
         try {
-          let summaryText = finalContent || '';
+          let summaryText = computedContent || '';
           if (attachmentsText) {
             summaryText += `\n[Attachments Content Preview]: ${attachmentsText.slice(0, 1000)}`;
           }
-          const aiResult = await getAISummaryAndTags(finalTitle, finalType, summaryText);
+          const aiResult = await getAISummaryAndTags(computedTitle, computedType, summaryText);
           aiSummary = aiResult.summary;
           aiTags = aiResult.tags;
         } catch (aiErr: any) {
@@ -345,7 +373,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
         }
 
         try {
-          entryDomains = await classifyEntryDomains(finalTitle, finalContent, finalType);
+          entryDomains = await classifyEntryDomains(computedTitle, computedContent, computedType);
         } catch (classErr: any) {
           console.error('Failed to regenerate domains on update:', classErr.message);
         }
@@ -483,6 +511,23 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           res.status(500).json({ error: `Failed to insert new attachments: ${insertError.message}` });
           return;
         }
+      }
+    }
+
+    // 3.5. Rebuild chunk-level embeddings
+    if (shouldRebuildChunks) {
+      try {
+        await rebuildEntryChunks(
+          supabase,
+          id,
+          userId,
+          finalTitle,
+          finalType,
+          finalContent,
+          finalAttachmentsText
+        );
+      } catch (chunkErr: any) {
+        console.error(`Failed to rebuild chunks on update for entry ${id}:`, chunkErr.message);
       }
     }
 
