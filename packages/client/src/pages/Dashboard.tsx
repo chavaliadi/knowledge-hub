@@ -9,7 +9,8 @@ import EntryForm from '../components/EntryForm';
 import EntryDetail from '../components/EntryDetail';
 import ChatPanel from '../components/ChatPanel';
 import IntelligenceDashboard from './IntelligenceDashboard';
-import { Plus, X, Sparkles, Filter, ArrowUpDown, Menu } from 'lucide-react';
+import GraphView from './GraphView';
+import { Plus, X, Sparkles, Filter, ArrowUpDown, Menu, Network } from 'lucide-react';
 
 type SortOrder = 'newest' | 'oldest' | 'az' | 'za';
 
@@ -49,7 +50,7 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'intelligence'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'favorites' | 'intelligence' | 'graph'>('all');
   const [aiSearch, setAiSearch] = useState(false);
 
   // Sort
@@ -283,6 +284,30 @@ export default function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
             <div className="flex-1 overflow-y-auto">
               <IntelligenceDashboard />
+            </div>
+          </div>
+        ) : activeFilter === 'graph' ? (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Mobile header only for sidebar toggle */}
+            <div className="md:hidden p-4 border-b border-brand-border/40 flex items-center gap-3 bg-brand-dark/20 shrink-0">
+              <button
+                className="p-2 rounded-xl border border-brand-border/40 text-brand-textMuted hover:text-brand-textMain hover:bg-brand-card transition-all"
+                onClick={() => setIsSidebarOpen(true)}
+              >
+                <Menu size={18} />
+              </button>
+              <h2 className="text-sm font-bold text-brand-textMain flex items-center gap-1.5">
+                <Network size={14} className="text-brand-accentLight" />
+                <span>Knowledge Concept Graph</span>
+              </h2>
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <GraphView onViewEntry={(id) => {
+                const entry = allRawEntries.find((e) => e.id === id);
+                if (entry) {
+                  setDetailEntry(entry);
+                }
+              }} />
             </div>
           </div>
         ) : (

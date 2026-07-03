@@ -11,7 +11,10 @@ KnowledgeHub is a premium, developer-focused, AI-powered personal knowledge base
   * **Image OCR / Diagram Transcription**: Google's Gemini-2.5-Flash API performs OCR on screenshots or diagrams (like database schemas or system architecture charts) and appends the description directly to the search vector.
   * **Local PDF Text Extraction**: Reads contents of uploaded PDFs locally via `pdf-parse` to maintain privacy and offline indexability.
   * **Interactive Document Views**: Built-in full-screen image lightboxes and embedded inline frame PDF reader pages.
-* **AI-Powered Concept Search**: Sparkles-toggle search modes utilize vector embeddings (`gemini-embedding-001`) and pgvector distance matches to calculate query similarity confidence (rendered as a `94% Match` badge).
+* **Chunk-Level Indexing (V3)**: Documents and attachment OCR texts are split into overlapping semantic chunks (1000 characters, 200 overlap) recursively rather than embedding whole files. This prevents vector dilution and guarantees precise retrieval focus.
+* **Hybrid Search & Reciprocal Rank Fusion (V3)**: Search queries retrieve matches from both pgvector chunk cosine similarity and PostgreSQL full-text keyword searches, merging their rankings using a **Reciprocal Rank Fusion (RRF)** ranking formula ($k=60$).
+* **Cross-Encoder Neural Reranking (V3)**: The SSE RAG chat pipeline retrieves a broad pool of candidates, reranks them locally using a CPU-friendly, fast ONNX model (`Xenova/bge-reranker-base`), and selects the top 5 highest-relevance passages.
+* **Interactive Knowledge Concept Graph (V3)**: Ingested documents are analyzed via Gemini to extract relationships (`depends_on`, `implements`, `relates_to`, `alternative_to`) to other entries. Rendered as a zero-dependency, physics-simulated, drag-and-zoom SVG interactive concept network on the frontend.
 * **SSE Conversational RAG Chat & Fallover**: Chat with your files! Retrieves relevant documents, reranks matches, feeds clean system prompts to Gemini-2.5-Flash, and streams Markdown-compatible answers using Server-Sent Events (SSE). If Gemini fails or hits rate limits, it transparently triggers a failover stream via Groq.
 * **Resilient Multi-Provider LLM Layer**: Text generation tasks automatically fall back from Gemini-2.5-Flash to Groq (`llama-3.3-70b-versatile`) on transient rate limits (429) or server errors (5xx). Client/config errors (400/403) are thrown directly. Spatial vector calculations remain locked to `gemini-embedding-001` to prevent database index poisoning.
 * **Browser Clipper Extension with Tag & Collection support**: Save active tab titles, URLs, selected page text, or custom notes in one click. Discovers active local client JSON Web Tokens (JWT) for instant single sign-on (SSO), loads tags/collections dynamically from the backend, and saves folders and labels at capturing time.
@@ -57,10 +60,12 @@ graph TD
         Auth_M[JWT Verification Middleware]
         DocParse[PDF / OCR Extraction Engine]
         GeminiService[Gemini API Adapter]
+        Chunker[Recursive Text Chunker]
+        RerankService[BGE Cross-Encoder Reranker]
     end
 
     subgraph DB ["Database & Storage (Supabase)"]
-        Postgres[(PostgreSQL DB + pgvector)]
+        Postgres[(PostgreSQL DB + pgvector + entry_chunks + concept_links)]
         RLS[Row Level Security Engine]
         StorageBucket[(Supabase Storage Bucket)]
     end
@@ -79,9 +84,12 @@ graph TD
     Routes --> Auth_M
     Auth_M -->|Verifies Token| Postgres
     Routes --> DocParse
+    Routes --> Chunker
     Routes --> GeminiService
+    Routes --> RerankService
     DocParse -->|Download Buffer| StorageBucket
     GeminiService -->|Generate Embeddings / Streaming Chat| GoogleGeminiAPI[Google Gemini Developer Platform]
+    RerankService -->|Load ONNX model CPU| ONNX[Local ONNX CPU Runtime]
     
     %% Database/Storage Interactions
     Routes -->|Read / Write SQL| RLS
@@ -93,8 +101,8 @@ graph TD
 
 ## 🔄 Core Workflows
 
-### 1. Save Entry, OCR Extraction, & Vectorization
-This diagram illustrates the lifecycle of creating a new entry with file attachments, extracting readable text from the assets, and generating vector embeddings.
+### 1. Save Entry, OCR Extraction, Chunking & Vectorization
+This diagram illustrates the lifecycle of creating a new entry with file attachments, extracting text, dividing it into recursive chunks, generating chunk-level vector embeddings, and computing semantic links to other notes.
 
 ```mermaid
 sequenceDiagram
@@ -128,19 +136,33 @@ sequenceDiagram
     Server->>Gemini: Request Title/Content Summary & Auto-Tags
     Gemini-->>Server: Return JSON (summary, tags)
     
-    Server->>Gemini: Generate Embedding Vector (gemini-embedding-001)
+    Server->>Gemini: Generate Embedding Vector for Entry
     Gemini-->>Server: Return 768-Dimension Float Array
     
-    Server->>DB: Save Row (entries, attachments, entry_tags, embedding vector)
-    DB-->>Server: Confirm SQL Insert Status
+    Server->>DB: Insert Entry Row (entries, attachments, entry_tags)
+    DB-->>Server: Confirm SQL Insert Status (Returns entry_id)
+
+    Server->>Server: Split text into overlapping segments (1000 chars, 200 overlap)
+    loop For each chunk
+        Server->>Gemini: Generate Chunk Embedding Vector
+        Gemini-->>Server: Return 768-Dimension Float Array
+        Server->>DB: Insert chunk into entry_chunks table
+    end
+
+    Server->>DB: Query other entries titles for this user
+    DB-->>Server: Return list of entry IDs and titles
+    Server->>Gemini: Determine relationship linkages to existing entries
+    Gemini-->>Server: Return JSON array of links (targetId, type)
+    Server->>DB: Save concept links in concept_links table
+
     Server-->>Client: Return Saved Entry JSON (201 Created)
     deactivate Server
     Client-->>User: Render Card on UI Dashboard
     deactivate Client
 ```
 
-### 2. Conversational RAG Chat & SSE Streaming
-The chat panel provides streaming, citation-anchored answers generated directly from your personal knowledge library using vector retrieval.
+### 2. Conversational RAG Chat, Hybrid Pool, & Cross-Encoder Rerank
+The chat panel retrieves candidate chunks, builds a hybrid pool with keyword search, ranks them using the local ONNX Cross-Encoder, and streams citation-anchored answers.
 
 ```mermaid
 sequenceDiagram
@@ -149,6 +171,7 @@ sequenceDiagram
     participant Panel as Chat Panel Component
     participant Server as Express Server
     participant DB as Supabase PostgreSQL
+    participant Rerank as BGE Cross-Encoder
     participant Gemini as Gemini API Service
 
     User->>Panel: Submits Chat Prompt
@@ -156,17 +179,31 @@ sequenceDiagram
     Panel->>Server: POST /chat { message }
     activate Server
     
-    Server->>Gemini: Generate Embeddings for Query (gemini-embedding-001)
+    Server->>Gemini: Generate Embeddings for Query
     Gemini-->>Server: Return 768-d Query Vector
     
-    Server->>DB: Call match_entries RPC (Query Vector, Threshold, Limit)
-    DB-->>Server: Return Top 8 Entries (Similarity Score)
+    Server->>DB: Call match_chunks RPC (Query Vector, Threshold, Limit=30)
+    DB-->>Server: Return Top 30 Vector Chunks
     
-    Note over Server: Rerank matches based on word frequency matching
-    Server->>Panel: Write Event: citations [Source #1, Source #2]
+    Server->>DB: Query entry_chunks using ILIKE (Keyword matches)
+    DB-->>Server: Return Top 15 Keyword Chunks
+    
+    Server->>Server: Merge and deduplicate pool of chunks
+    
+    Server->>Rerank: Compute relevance scores for pool chunks
+    activate Rerank
+    Note over Rerank: Local CPU ONNX inference (Xenova/bge-reranker-base)
+    Rerank-->>Server: Return Float Scores corresponding to chunks
+    deactivate Rerank
+
+    Server->>Server: Sort chunks by score & select Top 5
+    Server->>DB: Fetch parent entries details for Top 5 chunks
+    DB-->>Server: Return Entry details (ID, Title, Type, URL)
+    
+    Server->>Panel: Write Event: citations [Unique parent entries]
     Panel-->>User: Renders Citation Badge Placeholders
     
-    Server->>Gemini: streamGenerateContent (Sys Prompt + Query + Context Source text)
+    Server->>Gemini: streamGenerateContent (Sys Prompt + Query + Top 5 Chunks Context)
     activate Gemini
     loop Streaming Output
         Gemini-->>Server: Text Chunk Output
@@ -217,6 +254,33 @@ sequenceDiagram
     deactivate Server
     Client-->>User: Render interactive metrics, radar chart & recommendation cards
     deactivate Client
+```
+
+### 4. Interactive Knowledge Graph Fetching & Layout
+The interactive network graph plots saved topics as nodes and extracted relationship linkages as directed edges in a real-time Verlet physics canvas.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User Developer
+    participant Graph as Interactive Graph Component
+    participant Server as Express Server
+    participant DB as Supabase PostgreSQL
+
+    User->>Graph: Navigates to Knowledge Graph tab
+    activate Graph
+    Graph->>Server: GET /graph
+    activate Server
+    Server->>DB: Fetch user entries (nodes)
+    DB-->>Server: Return ID, Title, Type
+    Server->>DB: Fetch concept links (edges)
+    DB-->>Server: Return source_id, target_id, type
+    Server-->>Graph: Return JSON payload { nodes, links }
+    deactivate Server
+    
+    Note over Graph: Run SVG Verlet Integration physics simulation loop<br/>- Repulsive node forces<br/>- Attractive link forces<br/>- Friction and boundary limits
+    Graph-->>User: Renders glowing nodes, curved edges, and interactive panning/dragging
+    deactivate Graph
 ```
 
 ---
@@ -273,6 +337,25 @@ KnowledgeHub implements a relational PostgreSQL schema in Supabase with pgvector
 |     missing_topics (jsonb)           |
 |     insights (text)                  |
 +--------------------------------------+
+
++--------------------------------------+
+|             entry_chunks             |
++--------------------------------------+
+| PK  id (uuid)                        |
+| FK  entry_id (uuid)                  |
+|     chunk_index (integer)            |
+|     content (text)                   |
+|     embedding (vector)               |
++--------------------------------------+
+
++--------------------------------------+
+|            concept_links             |
++--------------------------------------+
+| PK  id (uuid)                        |
+| FK  source_id (uuid)                 |
+| FK  target_id (uuid)                 |
+|     relationship_type (text)         |
++--------------------------------------+
 ```
 
 ### Table Definitions
@@ -283,6 +366,8 @@ KnowledgeHub implements a relational PostgreSQL schema in Supabase with pgvector
 4. **`collections`**: Parent grouping directories. Deleting a collection clears the references in `entries` without deleting the cards.
 5. **`attachments`**: Meta indexes for files. References physical items stored inside the Supabase storage system.
 6. **`knowledge_reports`**: Caches calculated stats and AI analysis insight summaries per developer account to speed up dashboard re-renders and save Gemini API token usage.
+7. **`entry_chunks`**: Stores recursive text chunks of documents and attachments along with 768-dimensional chunk embeddings. Connected to `entries` via cascade delete.
+8. **`concept_links`**: Stores directed conceptual relationship edges between entries, automatically extracted via Gemini (`depends_on`, `implements`, `relates_to`, `alternative_to`).
 
 ### RLS Policies
 All tables enforce explicit Row-Level Security policies to protect private workspace accounts:
@@ -291,6 +376,8 @@ All tables enforce explicit Row-Level Security policies to protect private works
 * **Collections**: `auth.uid() = user_id`
 * **Attachments**: `auth.uid() = user_id`
 * **Knowledge Reports**: `auth.uid() = user_id`
+* **Entry Chunks**: `auth.uid() = user_id`
+* **Concept Links**: `auth.uid() = user_id`
 * **Entry Tags Join**: Evaluated by looking up if the associated entry has `public.entries.user_id = auth.uid()`.
 
 ---
@@ -321,7 +408,7 @@ All routes below require authentication headers: `Authorization: Bearer <Supabas
 ### Search Engine (`/search`)
 * `GET /search?q=query_text`: 
   * Keyword Search Mode (Default): Runs a regex ILIKE text check.
-  * AI Search Mode (`&ai=true`): Vectorizes search text and returns results sorted by pgvector cosine similarity index.
+  * AI Search Mode (`&ai=true`): Runs **Hybrid Search** with **RRF**. Vectorizes the query, retrieves candidate chunks from `entry_chunks` and keyword matches from `entries`, merges them using Reciprocal Rank Fusion, and returns sorted entries.
 
 ### RAG Assistant (`/chat`)
 * `POST /chat`: RAG Conversational assistant endpoint. Expects `Body: { message: "query" }` and returns a stream of events:
@@ -332,6 +419,9 @@ All routes below require authentication headers: `Authorization: Bearer <Supabas
 ### Intelligence Dashboard (`/intelligence`) **(V2)**
 * `GET /intelligence`: Fetches the current intelligence report. By default, it returns a cached report if it is less than 24 hours old.
   * Query Parameter `?refresh=true` bypasses the cache to recalculate metrics and query Gemini fresh.
+
+### Knowledge Graph (`/graph`) **(V3)**
+* `GET /graph`: Fetches the complete conceptual relationship edges (`concept_links`) and nodes (`entries`) registered by the authenticated user to render the network.
 
 ---
 
@@ -370,7 +460,8 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │   │   └── pages
 │   │   │       ├── Auth.tsx               # Login & Registration Page
 │   │   │       ├── Dashboard.tsx          # Main Application Dashboard
-│   │   │       └── IntelligenceDashboard.tsx # V2 Analytics view: radar scores, suggestions list
+│   │   │       ├── IntelligenceDashboard.tsx # V2 Analytics view: radar scores, suggestions list
+│   │   │       └── GraphView.tsx          # V3 Interactive force-directed knowledge graph page
 │   │   └── index.html
 │   ├── server                             # Express Server + TypeScript
 │   │   ├── index.ts                       # Server bootstrapping and routing entries
@@ -378,6 +469,10 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │       ├── lib
 │   │       │   ├── attachments.ts         # OCR transcription and PDF extract helpers
 │   │       │   ├── gemini.ts              # Gemini API embeddings / summary / domains / insights
+│   │       │   ├── chunker.ts             # V3 Recursive character text splitter utility
+│   │       │   ├── chunks.ts              # V3 Chunk embeddings rebuilding database helper
+│   │       │   ├── graph.ts               # V3 Concept edge linkages rebuilding database helper
+│   │       │   ├── reranker.ts            # V3 Local CPU Cross-Encoder relevance score pipeline
 │   │       │   ├── llm.ts                 # Unified multi-provider LLM failover engine (V2)
 │   │       │   └── supabase.ts            # Supabase Admin client
 │   │       ├── middleware
@@ -388,12 +483,16 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │       │   ├── entries.ts             # Card CRUD routes (including duplicate/related checks)
 │   │       │   ├── intelligence.ts        # Health metric routes & Gemini advice cache
 │   │       │   ├── search.ts              # Semantic or string query routes
+│   │       │   ├── graph.ts               # V3 Graph edges / nodes server endpoints
 │   │       │   └── tags.ts                # Tag routing
 │   │       └── scripts
 │   │           ├── reindex.ts             # Batched metadata generator recovery script
 │   │           ├── test-duplicate-check.ts # Duplicate warning math regression check (V2)
 │   │           ├── test-failover.ts       # Rate limit (429) simulated interception test (V2)
-│   │           └── test-reindex-e2e.ts    # Positive reindexing path E2E database verification (V2)
+│   │           ├── test-reindex-e2e.ts    # Positive reindexing path E2E database verification (V2)
+│   │           ├── test-phase1-e2e.ts     # V3 Chunks & Hybrid search verification script
+│   │           ├── test-phase2-e2e.ts     # V3 Local Cross-Encoder verification script
+│   │           └── test-phase3-e2e.ts     # V3 Concept Graph edges verification script
 │   └── clipper-extension                  # Chrome Browser Extension Clipper
 │       ├── manifest.json                  # Manifest configuration (Manifest V3)
 │       ├── popup.html                     # Extension clipper window layout
@@ -479,6 +578,18 @@ A suite of validation scripts is available to test core features and regressions
 * **Reindexer E2E Verification**: Inserts a raw note, triggers reindexing, asserts successful vector and AI metadata updates, and cleans up.
   ```bash
   bun run --cwd packages/server test:reindex
+  ```
+* **Phase 1 Chunks & Hybrid Search Test (V3)**: Verifies recursive document chunking limits, `entry_chunks` table schemas, and vector similarity querying.
+  ```bash
+  bun run --cwd packages/server src/scripts/test-phase1-e2e.ts
+  ```
+* **Phase 2 Cross-Encoder Reranker Test (V3)**: Verifies local CPU ONNX runtime execution of the sequence classifier (`bge-reranker-base`) on test documents and sorting logic.
+  ```bash
+  bun run --cwd packages/server src/scripts/test-phase2-e2e.ts
+  ```
+* **Phase 3 Concept Graph Connection Test (V3)**: Verifies directed relationship edge extraction via Gemini and insertion into the database.
+  ```bash
+  bun run --cwd packages/server src/scripts/test-phase3-e2e.ts
   ```
 
 ### Deploying the Chrome Extension

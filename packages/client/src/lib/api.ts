@@ -254,5 +254,15 @@ export const api = {
       throw new Error(await res.text());
     }
     return res.json();
+  },
+
+  // Graph API
+  getGraphData: async (): Promise<{ nodes: { id: string; title: string; type: string }[]; links: { id: string; source: string; target: string; type: string }[] }> => {
+    const headers = await getAuthHeaders();
+    const res = await fetch(`${BASE_URL}/graph`, { headers });
+    if (!res.ok) {
+      throw new Error(await res.text());
+    }
+    return res.json();
   }
 };
