@@ -7,6 +7,7 @@
     "start": "bun run index.ts",
     "dev": "bun --watch run index.ts",
     "reindex": "bun run src/scripts/reindex.ts",
+    "verify:migrations": "bun run src/scripts/verify-migrations.ts",
     "test:duplicate": "bun run src/scripts/test-duplicate-check.ts",
     "test:failover": "bun run src/scripts/test-failover.ts",
     "test:reindex": "bun run src/scripts/test-reindex-e2e.ts"

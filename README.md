@@ -513,14 +513,26 @@ curl -fsSL https://bun.sh/install | bash
 
 ### 2. Configure Supabase Environment
 Set up a PostgreSQL database in Supabase and run the migration scripts in the SQL editor in sequential order:
-1. Run [schema.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema.sql) (Core schema).
-2. Run [schema_v2.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v2.sql) (Pinning & Collections).
-3. Run [schema_v3.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v3.sql) (Attachments metadata).
-4. Run [schema_v4.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v4.sql) (pgvector functions).
-5. Run [schema_v5.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v5.sql) (Summary & AI Auto-tag tables).
-6. Run [schema_v6.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v6.sql) (Domains classifications & Cached analytics report table).
-7. Run [schema_v7.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v7.sql) (Chunk-level indexing & match_chunks function).
-8. Run [schema_v8.sql](file:///Users/srinivasch/Documents/Projects/KnowledgeHub/packages/server/schema_v8.sql) (Semantic concept linkages/edges).
+1. Run [schema.sql](packages/server/schema.sql) (Core schema).
+2. Run [schema_v2.sql](packages/server/schema_v2.sql) (Pinning & Collections).
+3. Run [schema_v3.sql](packages/server/schema_v3.sql) (Attachments metadata).
+4. Run [schema_v4.sql](packages/server/schema_v4.sql) (pgvector functions).
+5. Run [schema_v5.sql](packages/server/schema_v5.sql) (Summary & AI Auto-tag tables).
+6. Run [schema_v6.sql](packages/server/schema_v6.sql) (Domains classifications & Cached analytics report table).
+7. Run [schema_v7.sql](packages/server/schema_v7.sql) (Chunk-level indexing & match_chunks function).
+8. Run [schema_v8.sql](packages/server/schema_v8.sql) (Semantic concept linkages/edges).
+
+**Automated Migration (Alternative):** If you have `psql` installed and a direct database connection string, you can apply all migrations at once:
+```bash
+# Set the direct connection string in .env:
+# SUPABASE_DB_URL=postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+./scripts/migrate.sh
+```
+
+**Verify Migrations:** After applying migrations (manually or via script), confirm all tables and functions exist:
+```bash
+bun run --cwd packages/server verify:migrations
+```
 
 *Note: Create a storage bucket inside your Supabase Storage dashboard named `Knowledge-Hub`.*
 
