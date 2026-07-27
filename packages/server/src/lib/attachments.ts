@@ -43,6 +43,7 @@ export async function extractTextFromAttachment(
         const uint8Array = new Uint8Array(buffer);
         const parser = new PDFParse({ data: uint8Array });
         const parsedPdf = await parser.getText();
+        await parser.destroy();
         console.log(`Successfully extracted ${parsedPdf.text.length} characters from PDF ${fileName}`);
         return parsedPdf.text || '';
       } catch (pdfErr: any) {

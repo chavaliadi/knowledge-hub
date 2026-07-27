@@ -32,8 +32,10 @@ export async function rebuildEntryChunks(
   // 3. Generate embeddings for each chunk
   const chunkEmbeddings: number[][] = [];
   for (let i = 0; i < chunks.length; i++) {
+    const chunkTextToEmbed = chunks[i];
+    if (!chunkTextToEmbed) continue;
     try {
-      const embedding = await getEmbedding(chunks[i]);
+      const embedding = await getEmbedding(chunkTextToEmbed);
       chunkEmbeddings.push(embedding);
       // Brief delay to prevent rate limits on large uploads
       if (chunks.length > 5 && i < chunks.length - 1) {

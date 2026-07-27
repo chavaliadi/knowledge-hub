@@ -1,9 +1,5 @@
-import dotenv from 'dotenv';
-import path from 'path';
+import './env';
 import { generateTextWithFailover } from './llm';
-
-// Load environment variables from the project root .env
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 

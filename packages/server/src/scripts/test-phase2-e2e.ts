@@ -1,8 +1,5 @@
+import '../lib/env';
 import { computeRerankScores } from '../lib/reranker';
-import dotenv from 'dotenv';
-import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 async function runPhase2E2ETest() {
   console.log('=== Phase 2 Neural Reranker Verification ===\n');
@@ -34,7 +31,7 @@ async function runPhase2E2ETest() {
     });
 
     // Basic assertions
-    if (ranked[0].doc.includes('Kubernetes')) {
+    if (ranked[0]?.doc?.includes('Kubernetes')) {
       console.log('\n🎉 [PASS] Reranker correctly scored the most relevant document highest.');
     } else {
       console.warn('\n⚠ [WARNING] Rerank matches were not sorted as expected. Please check model behavior.');

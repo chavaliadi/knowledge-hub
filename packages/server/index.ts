@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import path from "path";
+import "./src/lib/env";
 import { authMiddleware } from "./src/middleware/auth";
 import entriesRouter from "./src/routes/entries";
 import tagsRouter from "./src/routes/tags";
@@ -10,9 +9,7 @@ import collectionsRouter from "./src/routes/collections";
 import chatRouter from "./src/routes/chat";
 import intelligenceRouter from "./src/routes/intelligence";
 import graphRouter from "./src/routes/graph";
-
-// Resolve environment variables from the project root .env
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+import { warmupReranker } from "./src/lib/reranker";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,4 +45,6 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  // Asynchronously warm up the ONNX Cross-Encoder model in the background
+  warmupReranker();
 });

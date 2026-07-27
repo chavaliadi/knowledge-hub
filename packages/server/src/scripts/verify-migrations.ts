@@ -12,11 +12,7 @@
  *   1 — One or more migrations are missing
  */
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-import path from 'path';
-
-// Load from root .env (4 levels up from packages/server/src/scripts/)
-dotenv.config({ path: path.resolve(import.meta.dir, '../../../../.env') });
+import '../lib/env';
 
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';

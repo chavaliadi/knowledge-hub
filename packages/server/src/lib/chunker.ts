@@ -40,6 +40,10 @@ export function chunkText(
     }
 
     const delimiter = delimiters[currentLevel];
+    if (delimiter === undefined) {
+      return [trimmed];
+    }
+
     let splits: string[] = [];
     if (delimiter === '') {
       splits = trimmed.split('');
@@ -51,7 +55,10 @@ export function chunkText(
     let currentChunk = '';
 
     for (let i = 0; i < splits.length; i++) {
-      let segment = splits[i];
+      const rawSegment = splits[i];
+      if (rawSegment === undefined) continue;
+      let segment: string = rawSegment;
+
       // Re-add delimiter if not at base character-level split
       if (delimiter !== '' && i < splits.length - 1) {
         segment += delimiter;

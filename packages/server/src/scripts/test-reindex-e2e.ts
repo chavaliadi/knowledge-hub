@@ -10,10 +10,8 @@
 
 import { supabaseAdmin } from '../lib/supabase';
 import { execSync } from 'child_process';
-import dotenv from 'dotenv';
+import '../lib/env';
 import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 async function runReindexerE2ETest() {
   console.log('=== Reindexer E2E Verification ===\n');

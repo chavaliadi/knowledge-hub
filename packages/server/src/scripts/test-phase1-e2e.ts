@@ -1,9 +1,6 @@
+import '../lib/env';
 import { supabaseAdmin } from '../lib/supabase';
 import { rebuildEntryChunks } from '../lib/chunks';
-import dotenv from 'dotenv';
-import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 async function runPhase1E2ETest() {
   console.log('=== Phase 1 Chunks & Hybrid Search Verification ===\n');
@@ -97,7 +94,7 @@ async function runPhase1E2ETest() {
 
     console.log(`✔ Chunks verification: successfully built ${chunks.length} chunks.`);
     const firstChunk = chunks[0];
-    const hasEmbedding = firstChunk.embedding && firstChunk.embedding.startsWith('[') && firstChunk.embedding.endsWith(']');
+    const hasEmbedding = Boolean(firstChunk?.embedding && typeof firstChunk.embedding === 'string' && firstChunk.embedding.startsWith('[') && firstChunk.embedding.endsWith(']'));
     console.log(`✔ Chunk embedding populated: ${hasEmbedding ? 'YES' : 'NO'}`);
 
     // 7. Cleanup

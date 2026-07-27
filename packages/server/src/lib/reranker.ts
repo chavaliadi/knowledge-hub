@@ -8,7 +8,7 @@ import { AutoModelForSequenceClassification, AutoTokenizer } from '@xenova/trans
 let tokenizerInstance: any = null;
 let modelInstance: any = null;
 
-async function getReranker() {
+export async function getReranker() {
   if (!tokenizerInstance || !modelInstance) {
     try {
       console.log('Loading local Cross-Encoder model (Xenova/bge-reranker-base)...');
@@ -22,6 +22,20 @@ async function getReranker() {
     }
   }
   return { tokenizer: tokenizerInstance, model: modelInstance };
+}
+
+/**
+ * Asynchronously warms up the local Cross-Encoder ONNX model during server startup.
+ */
+export async function warmupReranker(): Promise<void> {
+  const t0 = Date.now();
+  console.log('Reranker Service: Warming up Cross-Encoder model in background...');
+  try {
+    await getReranker();
+    console.log(`Reranker Service: Model warmup complete (${Date.now() - t0}ms).`);
+  } catch (err: any) {
+    console.error('Reranker Service: Background warmup failed (will retry on demand):', err.message || err);
+  }
 }
 
 /**

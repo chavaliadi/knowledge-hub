@@ -312,7 +312,7 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
 router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const supabase = getSupabaseClient(req.headers.authorization);
   const userId = req.user!.id;
-  const { id } = req.params;
+  const entryId = String(req.params.id);
   const { title, content, type, url, tag_ids, is_favorite, collection_id, is_pinned, attachments } = req.body;
 
   try {
@@ -332,14 +332,14 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       const { data: existingEntry, error: fetchErr } = await supabase
         .from('entries')
         .select('title, type, content, attachments(*)')
-        .eq('id', id)
+        .eq('id', entryId)
         .eq('user_id', userId)
         .maybeSingle();
 
       if (existingEntry) {
-        const computedTitle = title !== undefined ? title : existingEntry.title;
-        const computedType = type !== undefined ? type : existingEntry.type;
-        const computedContent = content !== undefined ? content : existingEntry.content;
+        const computedTitle = title !== undefined ? String(title) : existingEntry.title;
+        const computedType = type !== undefined ? String(type) : existingEntry.type;
+        const computedContent = content !== undefined ? (content ? String(content) : null) : existingEntry.content;
         
         // Final attachments to be embedded
         const finalAttachments = attachments !== undefined ? attachments : (existingEntry.attachments || []);
@@ -412,7 +412,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     const { data: updatedEntry, error: entryError } = await supabase
       .from('entries')
       .update(updateData)
-      .eq('id', id)
+      .eq('id', entryId)
       .eq('user_id', userId)
       .select()
       .maybeSingle();
@@ -433,7 +433,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       const { error: deleteError } = await supabase
         .from('entry_tags')
         .delete()
-        .eq('entry_id', id);
+        .eq('entry_id', entryId);
 
       if (deleteError) {
         res.status(500).json({ error: `Failed to update tags: ${deleteError.message}` });
@@ -443,7 +443,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       // Re-insert new tag mappings
       if (tag_ids.length > 0) {
         const joinRows = tag_ids.map((tagId: string) => ({
-          entry_id: id,
+          entry_id: entryId,
           tag_id: tagId
         }));
 
@@ -464,7 +464,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       const { data: existingAtts, error: fetchAttsError } = await supabase
         .from('attachments')
         .select('*')
-        .eq('entry_id', id);
+        .eq('entry_id', entryId);
 
       if (fetchAttsError) {
         res.status(500).json({ error: `Failed to fetch existing attachments: ${fetchAttsError.message}` });
@@ -510,7 +510,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       if (toInsert.length > 0) {
         const insertRows = toInsert.map((att: any) => ({
           user_id: userId,
-          entry_id: id,
+          entry_id: entryId,
           file_path: att.file_path,
           file_name: att.file_name,
           file_size: att.file_size,
@@ -533,7 +533,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
       try {
         await rebuildEntryChunks(
           supabase,
-          id,
+          entryId,
           userId,
           finalTitle,
           finalType,
@@ -541,19 +541,19 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
           finalAttachmentsText
         );
       } catch (chunkErr: any) {
-        console.error(`Failed to rebuild chunks on update for entry ${id}:`, chunkErr.message);
+        console.error(`Failed to rebuild chunks on update for entry ${entryId}:`, chunkErr.message);
       }
 
       try {
         await rebuildEntrySemanticLinks(
           supabase,
-          id,
+          entryId,
           userId,
           finalTitle,
           finalContent
         );
       } catch (linkErr: any) {
-        console.error(`Failed to rebuild concept links on update for entry ${id}:`, linkErr.message);
+        console.error(`Failed to rebuild concept links on update for entry ${entryId}:`, linkErr.message);
       }
     }
 
@@ -561,7 +561,7 @@ router.put('/:id', async (req: AuthenticatedRequest, res: Response): Promise<voi
     const { data: fullEntry, error: fetchError } = await supabase
       .from('entries')
       .select('*, entry_tags(tag:tags(id, name)), collections(name), attachments(*)')
-      .eq('id', id)
+      .eq('id', entryId)
       .single();
 
     if (fetchError) {

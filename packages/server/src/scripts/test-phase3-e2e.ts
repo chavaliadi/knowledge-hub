@@ -1,9 +1,6 @@
+import '../lib/env';
 import { supabaseAdmin } from '../lib/supabase';
 import { rebuildEntrySemanticLinks } from '../lib/graph';
-import dotenv from 'dotenv';
-import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
 
 async function runPhase3E2ETest() {
   console.log('=== Phase 3 Concept Graph Verification ===\n');

@@ -12,10 +12,7 @@
  * The real GROQ_API_KEY must be set in your .env for this to work.
  */
 
-import dotenv from 'dotenv';
-import path from 'path';
-
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+import '../lib/env';
 
 // ─────────────────────────────────────────────
 // Validate GROQ_API_KEY exists before we start

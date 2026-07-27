@@ -1,8 +1,4 @@
-import dotenv from 'dotenv';
-import path from 'path';
-
-// Load environment variables from the project root .env
-dotenv.config({ path: path.resolve(__dirname, '../../../../.env') });
+import './env';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
