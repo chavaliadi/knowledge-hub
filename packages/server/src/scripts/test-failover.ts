@@ -54,7 +54,7 @@ async function testFailoverOn429() {
   process.env.GEMINI_API_KEY = ''; // No Gemini key at all
   
   const groqTestUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  console.log(`  Calling Groq directly with model 'llama-3.3-70b-versatile'...`);
+  console.log(`  Calling Groq directly with model 'openai/gpt-oss-120b'...`);
   
   let test2Passed = false;
   try {
@@ -65,7 +65,7 @@ async function testFailoverOn429() {
         Authorization: `Bearer ${REAL_GROQ_KEY}`
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         messages: [{ role: 'user', content: 'Reply with exactly the word: GROQ_OK' }],
         temperature: 0,
         max_tokens: 10
@@ -100,7 +100,7 @@ async function testFailoverOn429() {
         Authorization: 'Bearer '  // empty key
       },
       body: JSON.stringify({
-        model: 'llama-3.3-70b-versatile',
+        model: 'openai/gpt-oss-120b',
         messages: [{ role: 'user', content: 'test' }]
       })
     });

@@ -5,13 +5,12 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 
 /**
  * The stable production model ID for Groq.
- * Using `llama-3.3-70b-versatile` (GA) rather than the `specdec` preview
- * which is subject to deprecation. Verified live against Groq's model list.
+ * Using `openai/gpt-oss-120b` (GA). Verified live against Groq's model list.
  */
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'openai/gpt-oss-120b';
 
 /**
- * Generates text using Gemini with a transparent fallback to Groq Llama.
+ * Generates text using Gemini with a transparent fallback to Groq.
  *
  * Failover policy:
  *   - 429 (rate limit), 5xx (server errors), and network timeouts → failover to Groq
@@ -96,7 +95,7 @@ export async function generateTextWithFailover(
     }
   }
 
-  // 2. Fallback to Groq (llama-3.3-70b-versatile, stable GA)
+  // 2. Fallback to Groq (openai/gpt-oss-120b, stable GA)
   if (GROQ_API_KEY) {
     console.log(`LLM Service: Falling back to Groq (${GROQ_MODEL})...`);
     const url = 'https://api.groq.com/openai/v1/chat/completions';

@@ -10,14 +10,14 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
 /**
  * Stable Groq model ID for streaming fallback.
- * Using llama-3.3-70b-versatile (GA) — verified against Groq's live model list.
+ * Using openai/gpt-oss-120b (GA) — verified against Groq's live model list.
  * Note: The SSE failover below only covers pre-stream failures (Gemini returns non-2xx
  * before any data is read). Mid-stream failures (Gemini 429 after partial tokens are
  * already sent to the client) are not recoverable — the user will see a truncated
  * response. This is a known limitation; full mid-stream recovery would require
  * buffering the entire response before flushing, which defeats streaming latency.
  */
-const GROQ_STREAM_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_STREAM_MODEL = 'openai/gpt-oss-120b';
 
 // Hybrid search / reranking helper
 const rerankCandidates = (
