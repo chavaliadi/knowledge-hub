@@ -3,17 +3,9 @@ import { getSupabaseClient } from '../lib/supabase';
 import type { AuthenticatedRequest } from '../middleware/auth';
 import type { Response } from 'express';
 import { generateInsightAndNextTopics } from '../lib/gemini';
+import { computeKnowledgeHealthScore, FIXED_DOMAINS } from '../lib/healthScore';
 
 const router = Router();
-
-const FIXED_DOMAINS = [
-  'Backend',
-  'Frontend',
-  'AI/ML',
-  'System Design',
-  'Databases',
-  'DevOps/Cloud'
-];
 
 // GET /intelligence - Fetch intelligence report analytics
 router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -73,71 +65,21 @@ router.get('/', async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
-    // 3. Compute score stats
+    // 3. Compute score stats using deterministic helper
     const totalEntries = entries.length;
-    
-    // Domain counts & coverage
+    const scoreResult = computeKnowledgeHealthScore(entries, FIXED_DOMAINS);
+    const overallScore = scoreResult.overall_score;
+    const domainScores = scoreResult.domain_scores;
     const domainCounts: Record<string, number> = FIXED_DOMAINS.reduce((acc, d) => ({ ...acc, [d]: 0 }), {} as Record<string, number>);
-    let classifiedCount = 0;
-
     for (const entry of entries) {
       if (entry.domains && Array.isArray(entry.domains)) {
         entry.domains.forEach(d => {
           if (FIXED_DOMAINS.includes(d)) {
             domainCounts[d] = (domainCounts[d] || 0) + 1;
-            classifiedCount++;
           }
         });
       }
     }
-
-    // Metric component weights
-    // a. Domain Spread / Coverage (30% weight)
-    const activeDomains = Object.values(domainCounts).filter(c => c > 0).length;
-    const spreadScore = (activeDomains / FIXED_DOMAINS.length) * 100;
-
-    // b. Content Depth: avg characters (25% weight)
-    let totalContentCharCount = 0;
-    entries.forEach(e => {
-      totalContentCharCount += (e.content || '').length;
-    });
-    const avgLength = totalContentCharCount / totalEntries;
-    const depthScore = Math.min((avgLength / 1000) * 100, 100); // 1000+ chars = full marks
-
-    // c. Tag Density: avg tag attachments (20% weight)
-    let totalTagsCount = 0;
-    entries.forEach(e => {
-      if (e.entry_tags && Array.isArray(e.entry_tags)) {
-        totalTagsCount += e.entry_tags.length;
-      }
-    });
-    const avgTags = totalTagsCount / totalEntries;
-    const tagScore = Math.min((avgTags / 3) * 100, 100); // 3+ tags per entry = full marks
-
-    // d. Recency: updates in past 30 days (25% weight)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const recencyCount = entries.filter(e => {
-      const entryTime = new Date(e.updated_at || e.created_at).getTime();
-      return entryTime > thirtyDaysAgo.getTime();
-    }).length;
-    const recencyScore = Math.min((recencyCount / 10) * 100, 100); // 10+ updates in month = full marks
-
-    // Weighted Overall Score
-    const overallScore = Math.round(
-      (spreadScore * 0.3) + 
-      (depthScore * 0.25) + 
-      (tagScore * 0.20) + 
-      (recencyScore * 0.25)
-    );
-
-    // Compute relative percentage scores per domain based on maximum frequency
-    const maxDomainCount = Math.max(...Object.values(domainCounts), 1);
-    const domainScores = FIXED_DOMAINS.reduce((acc, d) => {
-      // Normalize percentages relative to active categories
-      const pct = Math.round(((domainCounts[d] || 0) / maxDomainCount) * 100);
-      return { ...acc, [d]: pct };
-    }, {} as Record<string, number>);
 
     // 4. Run Gemini Insight service
     let aiInsight = '';

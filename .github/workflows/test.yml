@@ -35,7 +35,22 @@ jobs:
       env:
         CI: true
 
-    - name: Run Reindexer E2E Verification
-      run: bun run --cwd packages/server test:reindex
+    - name: Run Attachment Extraction Unit Test
+      run: bun run --cwd packages/server test:attachments
+      env:
+        CI: true
+
+    - name: Run Health Score Formula Unit Test
+      run: bun run --cwd packages/server test:health
+      env:
+        CI: true
+
+    - name: Run Clipper Extension SSO Unit Test
+      run: bun run --cwd packages/server test:clipper
+      env:
+        CI: true
+
+    - name: Run RLS Isolation Test
+      run: bun run --cwd packages/server test:rls
       env:
         CI: true

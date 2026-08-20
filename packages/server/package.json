@@ -10,7 +10,11 @@
     "verify:migrations": "bun run src/scripts/verify-migrations.ts",
     "test:duplicate": "bun run src/scripts/test-duplicate-check.ts",
     "test:failover": "bun run src/scripts/test-failover.ts",
-    "test:reindex": "bun run src/scripts/test-reindex-e2e.ts"
+    "test:reindex": "bun run src/scripts/test-reindex-e2e.ts",
+    "test:attachments": "bun run src/scripts/test-attachments.ts",
+    "test:health": "bun run src/scripts/test-health-score.ts",
+    "test:clipper": "bun run src/scripts/test-clipper-sso.ts",
+    "test:rls": "bun run src/scripts/test-rls-isolation.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
