@@ -16,8 +16,8 @@ import path from 'path';
 async function runReindexerE2ETest() {
   console.log('=== Reindexer E2E Verification ===\n');
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.GEMINI_API_KEY) {
-    console.warn('\n❌ [SKIP] SUPABASE_SERVICE_ROLE_KEY or GEMINI_API_KEY is not set. Skipping reindexer E2E test.\n');
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY || !process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.GEMINI_API_KEY) {
+    console.warn('\n❌ [SKIP] SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, or GEMINI_API_KEY is not set. Skipping reindexer E2E test.\n');
     process.exit(process.env.CI ? 0 : 1);
   }
 

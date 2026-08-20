@@ -3,11 +3,13 @@ import './env';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 
+export type SupportedGroqModel = 'openai/gpt-oss-120b' | 'llama-3.3-70b-versatile';
+
 /**
  * The stable production model ID for Groq.
  * Using `openai/gpt-oss-120b` (GA). Verified live against Groq's model list.
  */
-const GROQ_MODEL = 'openai/gpt-oss-120b';
+const GROQ_MODEL: SupportedGroqModel = 'openai/gpt-oss-120b';
 
 /**
  * Generates text using Gemini with a transparent fallback to Groq.

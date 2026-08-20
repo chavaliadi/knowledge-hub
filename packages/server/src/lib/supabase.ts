@@ -6,8 +6,7 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('[FATAL] SUPABASE_URL or SUPABASE_ANON_KEY is not defined. Server cannot start.');
-  process.exit(1);
+  console.warn('Warning: SUPABASE_URL or SUPABASE_ANON_KEY is not defined in environment variables.');
 }
 
 /**

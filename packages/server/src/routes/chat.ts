@@ -8,6 +8,8 @@ import { computeRerankScores } from '../lib/reranker';
 const router = Router();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 
+import type { SupportedGroqModel } from '../lib/llm';
+
 /**
  * Stable Groq model ID for streaming fallback.
  * Using openai/gpt-oss-120b (GA) — verified against Groq's live model list.
@@ -17,7 +19,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
  * response. This is a known limitation; full mid-stream recovery would require
  * buffering the entire response before flushing, which defeats streaming latency.
  */
-const GROQ_STREAM_MODEL = 'openai/gpt-oss-120b';
+const GROQ_STREAM_MODEL: SupportedGroqModel = 'openai/gpt-oss-120b';
 
 // Hybrid search / reranking helper
 const rerankCandidates = (
