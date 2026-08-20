@@ -8,7 +8,14 @@
     "dev:server": "bun --cwd packages/server dev",
     "dev": "bun run dev:server & bun run dev:client",
     "typecheck": "bun --cwd packages/client tsc --noEmit && bun --cwd packages/server tsc --noEmit",
-    "verify:migrations": "bun --cwd packages/server verify:migrations"
+    "verify:migrations": "bun --cwd packages/server verify:migrations",
+    "test:duplicate": "bun --cwd packages/server test:duplicate",
+    "test:failover": "bun --cwd packages/server test:failover",
+    "test:reindex": "bun --cwd packages/server test:reindex",
+    "test:attachments": "bun --cwd packages/server test:attachments",
+    "test:health": "bun --cwd packages/server test:health",
+    "test:clipper": "bun --cwd packages/server test:clipper",
+    "test:rls": "bun --cwd packages/server test:rls"
   },
   "devDependencies": {
     "@types/bun": "latest"

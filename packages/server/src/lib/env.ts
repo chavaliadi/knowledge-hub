@@ -23,14 +23,14 @@ export function loadEnv(): void {
   for (const dir of candidateDirs) {
     const envPath = path.join(dir, '.env');
     if (fs.existsSync(envPath)) {
-      dotenv.config({ path: envPath });
+      dotenv.config({ path: envPath, override: true });
       envLoaded = true;
       return;
     }
   }
 
   // Fallback to default dotenv discovery
-  dotenv.config();
+  dotenv.config({ override: true });
   envLoaded = true;
 }
 
