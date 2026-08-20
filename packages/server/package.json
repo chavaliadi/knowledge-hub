@@ -14,7 +14,8 @@
     "test:attachments": "bun run src/scripts/test-attachments.ts",
     "test:health": "bun run src/scripts/test-health-score.ts",
     "test:clipper": "bun run src/scripts/test-clipper-sso.ts",
-    "test:rls": "bun run src/scripts/test-rls-isolation.ts"
+    "test:rls": "bun run src/scripts/test-rls-isolation.ts",
+    "test:ingestion": "bun run src/scripts/test-entry-ingestion.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

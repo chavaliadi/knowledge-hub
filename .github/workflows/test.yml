@@ -54,3 +54,8 @@ jobs:
       run: bun run --cwd packages/server test:rls
       env:
         CI: true
+
+    - name: Run Multi-Format Entry Ingestion Unit Test
+      run: bun run --cwd packages/server test:ingestion
+      env:
+        CI: true

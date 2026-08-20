@@ -15,7 +15,8 @@
     "test:attachments": "bun --cwd packages/server test:attachments",
     "test:health": "bun --cwd packages/server test:health",
     "test:clipper": "bun --cwd packages/server test:clipper",
-    "test:rls": "bun --cwd packages/server test:rls"
+    "test:rls": "bun --cwd packages/server test:rls",
+    "test:ingestion": "bun --cwd packages/server test:ingestion"
   },
   "devDependencies": {
     "@types/bun": "latest"
