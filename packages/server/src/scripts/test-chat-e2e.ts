@@ -74,7 +74,7 @@ async function runChatE2ETest() {
     testEntryId = entryData.id;
 
     // Populate chunks using rebuildEntryChunks
-    await rebuildEntryChunks(supabaseAdmin, testEntryId, testUserId, entryContent);
+    await rebuildEntryChunks(supabaseAdmin, testEntryId, testUserId, entryTitle, 'note', entryContent, '');
 
     console.log(`  Created Test User ID: ${testUserId}`);
     console.log(`  Created Test Entry ID: ${testEntryId}`);
