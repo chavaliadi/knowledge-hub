@@ -59,3 +59,8 @@ jobs:
       run: bun run --cwd packages/server test:ingestion
       env:
         CI: true
+
+    - name: Run RAG Chat Route E2E Test
+      run: bun run --cwd packages/server test:chat
+      env:
+        CI: true

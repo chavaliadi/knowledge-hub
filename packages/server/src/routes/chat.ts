@@ -4,6 +4,7 @@ import type { AuthenticatedRequest } from '../middleware/auth';
 import type { Response } from 'express';
 import { getEmbedding } from '../lib/gemini';
 import { computeRerankScores } from '../lib/reranker';
+import { ragChatPromptTemplate } from '../lib/prompts';
 
 const router = Router();
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -233,16 +234,12 @@ router.post('/', async (req: AuthenticatedRequest, res: Response): Promise<void>
       formattedContext = 'No relevant notes or bookmarks were found in the database matching this query.';
     }
 
-    const systemPrompt = `You are KnowledgeHub's AI Assistant. Answer the user's question using ONLY the following verified saves from their personal database:
-
-[Verified Saves]
-${formattedContext}
-
-Instructions:
-1. Ground your answer strictly in the provided sources. Do not make up facts or use external knowledge.
-2. Reference the sources in your answer using bracketed numbers like [1], [2], corresponding to the source list (e.g. [Source #1] -> [1]). Include multiple citations if multiple sources support the claim (e.g. [1][2]).
-3. If the provided sources do not contain sufficient info to answer the question, state exactly: "I couldn't find any information about that in your saved knowledge. Please check your query or add relevant notes." Do not synthesize from generic LLM knowledge in this case.
-4. Keep the answer clear, structured, and developer-focused. Include markdown code blocks if the sources contain relevant snippets.`;
+    // Format system prompt using LangChain ChatPromptTemplate
+    const formattedPromptMessages = await ragChatPromptTemplate.formatMessages({
+      context: formattedContext,
+      question: message
+    });
+    const systemPrompt = (formattedPromptMessages[0]?.content as string) || '';
 
     // 5. Call Gemini stream API with fallback to Groq
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;

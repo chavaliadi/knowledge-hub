@@ -16,7 +16,9 @@
     "test:health": "bun --cwd packages/server test:health",
     "test:clipper": "bun --cwd packages/server test:clipper",
     "test:rls": "bun --cwd packages/server test:rls",
-    "test:ingestion": "bun --cwd packages/server test:ingestion"
+    "test:ingestion": "bun --cwd packages/server test:ingestion",
+    "test:chat": "bun --cwd packages/server test:chat",
+    "sandbox:langchain": "bun --cwd packages/server sandbox:langchain"
   },
   "devDependencies": {
     "@types/bun": "latest"
