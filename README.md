@@ -35,6 +35,7 @@ Why is KnowledgeHub built with this specific stack?
 3. **pgvector extension**: Enables high-dimensional vector search natively inside PostgreSQL. We calculate similarity scores using standard SQL queries, avoiding the maintenance overhead, latency, and synchronization issues of external vector databases.
 4. **Google Gemini-2.5-Flash & Groq GPT-OSS Failover**: Primary generation runs on Gemini 2.5 Flash for high context capability and markdown structure. If Gemini errors out or hits limits, text tasks transparently failover to Groq (`openai/gpt-oss-120b`) to maximize backend availability.
 5. **React, Tailwind CSS & Glassmorphism styling**: Tailored for developer ergonomics. Features custom animations, smooth transitions, card elevation, and glowing dark-mode indicators representing search similarity.
+6. **LangChain Core Abstractions**: Used narrowly for `ChatPromptTemplate` in the RAG conversational assistant system prompt, and in a standalone comparison sandbox. The Gemini and Groq failover logic in `llm.ts` remains hand-rolled and tested, not routed through LangChain, as a deliberate choice for fine-grained error control and embedding model locking.
 
 ---
 
@@ -469,6 +470,8 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │       ├── lib
 │   │       │   ├── attachments.ts         # OCR transcription and PDF extract helpers
 │   │       │   ├── gemini.ts              # Gemini API embeddings / summary / domains / insights
+│   │       │   ├── healthScore.ts         # Deterministic knowledge health score formula
+│   │       │   ├── prompts.ts             # LangChain ChatPromptTemplate definitions
 │   │       │   ├── chunker.ts             # V3 Recursive character text splitter utility
 │   │       │   ├── chunks.ts              # V3 Chunk embeddings rebuilding database helper
 │   │       │   ├── graph.ts               # V3 Concept edge linkages rebuilding database helper
@@ -487,16 +490,24 @@ The **Knowledge Health Score** is calculated out of 100 based on four primary me
 │   │       │   └── tags.ts                # Tag routing
 │   │       └── scripts
 │   │           ├── reindex.ts             # Batched metadata generator recovery script
+│   │           ├── langchain-model-sandbox.ts # Standalone provider comparison sandbox
 │   │           ├── test-duplicate-check.ts # Duplicate warning math regression check (V2)
 │   │           ├── test-failover.ts       # Rate limit (429) simulated interception test (V2)
 │   │           ├── test-reindex-e2e.ts    # Positive reindexing path E2E database verification (V2)
+│   │           ├── test-attachments.ts    # PDF text and mocked image OCR extraction unit test
+│   │           ├── test-health-score.ts   # ADR 003 knowledge health score formula test suite
+│   │           ├── test-clipper-sso.ts    # Clipper extension token parsing unit test
+│   │           ├── test-rls-isolation.ts  # Multi-user Row-Level Security isolation test
+│   │           ├── test-entry-ingestion.ts # Notes, bookmarks, and snippets ingestion test
+│   │           ├── test-chat-e2e.ts       # RAG chat SSE stream and citations verification
 │   │           ├── test-phase1-e2e.ts     # V3 Chunks & Hybrid search verification script
 │   │           ├── test-phase2-e2e.ts     # V3 Local Cross-Encoder verification script
 │   │           └── test-phase3-e2e.ts     # V3 Concept Graph edges verification script
 │   └── clipper-extension                  # Chrome Browser Extension Clipper
 │       ├── manifest.json                  # Manifest configuration (Manifest V3)
 │       ├── popup.html                     # Extension clipper window layout
-│       └── popup.js                       # Active page text parsing and local token SSO
+│       ├── popup.js                       # Active page text parsing and local token SSO
+│       └── auth-helper.js                 # Pure SSO token extraction and storage parser
 ├── package.json                           # Monorepo configuration scripts
 └── README.md                              # Global developer documentation
 ```
@@ -591,6 +602,34 @@ A suite of validation scripts is available to test core features and regressions
   ```bash
   bun run --cwd packages/server test:reindex
   ```
+* **Attachment Extraction Test**: Validates local PDF text extraction via `pdf-parse` and mocked Gemini multimodal image OCR transcription.
+  ```bash
+  bun run --cwd packages/server test:attachments
+  ```
+* **Health Score Formula Test**: Verifies Knowledge Health Score arithmetic, weights, caps, and 19 boundary condition cases per ADR 003.
+  ```bash
+  bun run --cwd packages/server test:health
+  ```
+* **Clipper Extension SSO Test**: Validates browser storage token discovery and JWT extraction pure functions without browser dependencies.
+  ```bash
+  bun run --cwd packages/server test:clipper
+  ```
+* **RLS Multi-User Isolation Test**: Performs real multi-user isolation checks across distinct Supabase user accounts, asserting User B cannot select, update, or delete User A records.
+  ```bash
+  bun run --cwd packages/server test:rls
+  ```
+* **Multi-Format Entry Ingestion Test**: Validates symmetric creation, 400 validation, tag associations, and GET database round-trips for notes, bookmarks, and code snippets with mocked AI services.
+  ```bash
+  bun run --cwd packages/server test:ingestion
+  ```
+* **RAG Chat Route Verification Test**: Tests end-to-end RAG chat execution with LangChain ChatPromptTemplate, citations array delivery, and streamed grounded responses.
+  ```bash
+  bun run --cwd packages/server test:chat
+  ```
+* **LangChain Provider Sandbox**: Executes side-by-side Gemini and Groq queries through LangChain wrappers and analyzes provider error shapes.
+  ```bash
+  bun run --cwd packages/server sandbox:langchain
+  ```
 * **Phase 1 Chunks & Hybrid Search Test (V3)**: Verifies recursive document chunking limits, `entry_chunks` table schemas, and vector similarity querying.
   ```bash
   bun run --cwd packages/server src/scripts/test-phase1-e2e.ts
@@ -603,6 +642,12 @@ A suite of validation scripts is available to test core features and regressions
   ```bash
   bun run --cwd packages/server src/scripts/test-phase3-e2e.ts
   ```
+
+### Continuous Integration
+Automated verification runs on every push and pull request via GitHub Actions ([.github/workflows/test.yml](.github/workflows/test.yml)):
+* **Workspace Typecheck**: Validates clean TypeScript compilation across client and server packages (`bun run typecheck`).
+* **Unit and Regression Test Suite**: Automatically executes `test:duplicate`, `test:failover`, `test:attachments`, `test:health`, `test:clipper`, `test:rls`, and `test:ingestion`.
+* **RAG Chat Ingestion Guard**: The `test:chat` step runs in CI but automatically skips execution without making live network calls when Supabase or Gemini API secrets are absent in GitHub runner environments.
 
 ### Deploying the Chrome Extension
 1. Open Google Chrome and go to `chrome://extensions/`.
